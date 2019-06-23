@@ -20,17 +20,29 @@
 This repository includes custom layer implementations for a whole family of attention mechanisms, compatible with TensorFlow and Keras integration. Attention mechanisms have transformed the landscape of machine translation, and their utilization in other domains of NLP are increasing by day. In a broader sense, they aim to eliminate compression and loss of information due to fixed-length encoding of hidden states derived from input sequences in RNNs. The layers in this repository are tailored specifically for many-to-one sequence tasks, such as sentiment classification and language modeling.
 
 ## Attention Types
+<div style="text-align:center" markdown="1">
+
 ![Attention Categories](assets/attention_categories.png)
+
+</div>
 
 ### Self Attention
 First introduced in "Long Short-Term Memory-Networks for Machine Reading" by Jianpeng Cheng et al. The idea is to relate different positions of the same hidden state space derived from the input sequence, based on the argument that multiple components together form the overall semantics of a sequence. This approach brings together these differently positioned information through **multiple hops** attention. This particular implementation follows "A Structured Self-Attentive Sentence Embedding" by Zhouhan Lin et al. where authors propose an additional loss metric for regularization to prevent the redundancy problems of the embedding matrix if the attention mechanism always provides similar annotation weights.
 
+<div style="text-align:center" markdown="1">
+
 ![Self Attention](assets/self_attention.png)
+
+</div>
 
 ### Global (Soft) Attention
 First introduced in "Neural Machine Translation by Jointly Learning to Align and Translate" by Dzmitry Bahdanau et al. The idea is to derive a context vector based on **all** hidden states of the encoder RNN. Hence, it is said that this type of attention *attends* to the entire input state space.
 
+<div style="text-align:center" markdown="1">
+
 ![Global Attention](assets/global_attention.png)
+
+</div>
 
 ### Local (Hard) Attention
 First introduced in "Show, Attend and Tell: Neural Image Caption Generation with Visual Attention" by Kelvin Xu et al. and adapted to NLP in "Effective Approaches to Attention-based Neural Machine Translation" by Minh-Thang Luong et al. The idea is to  eliminate the attentive cost of global attention by instead focusing on a small subset of tokens in hidden states set derived from the input sequence. This window is proposed as ```[p_t-D, p_t+D]``` where ```D=width```, and we disregard positions that cross sequence boundaries. The aligned position, ```p_t```, is decided either through **a) monotonic alignment:** set ```p_t=t```, or **b) predictive alignment**: set ```p_t = S*sigmoid(FC1(tanh(FC2(h_t)))``` where fully-connected layers are trainable weight matrices. Since yielding an integer index value is undifferentiable due to ```tf.cast()``` and similar methods, this implementation instead derives a aligned position float value and uses Gaussian distribution to
@@ -40,33 +52,61 @@ alignment:** set ```p_t``` as in ii), but apply it to all source hidden states (
 of the target hidden state (```h_t```). Then, choose top ```@window_width``` positions to build
 the context vector and zero out the rest.
 
+<div style="text-align:center" markdown="1">
+
 ![Local Attention](assets/local_attention.png)
 
+</div>
+
 ## Alignment Functions
+<div style="text-align:center" markdown="1">
+
 ![Alignment Functions](assets/alignment_functions.png)
+
+</div>
+
 Each function is trying to compute an alignment score given a target hidden state (```h_t```) and source hidden states (```h_s```).
 
 ### Dot Product
+<div style="text-align:center" markdown="1">
+
 ![Dot Product](https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=h_t^\intercal&space;\cdot&space;h_s)
 
+</div>
+
 ### Scaled Dot Product
+<div style="text-align:center" markdown="1">
+
 ![Scaled Dot Product](https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=\frac{h_t^\intercal&space;\cdot&space;h_s}{\sqrt{H}})
+
+</div>
 
 where ```H``` is the number of hidden states given by the encoder RNN.
 
 ### General
+<div style="text-align:center" markdown="1">
+
 ![General](https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=h_t^\intercal&space;\cdot&space;W_a&space;\cdot&space;h_s)
+
+</div>
 
 where ```W_a``` is a trainable weight matrix.
 
 ### Concat
+<div style="text-align:center" markdown="1">
+
 ![Concat](https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=v_a^\intercal&space;\cdot&space;\tanh(W_a[h_t:h_s]))
+
+</div>
 
 where ```v_a``` and ```W_a``` are trainable weight matrices.
 
 ### Location-Based
+<div style="text-align:center" markdown="1">
+
 ![Location Based](https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=W_a&space;\cdot&space;h_t)
 
+</div>
 
 where ```W_a``` is a trainable weight matrix.
 
