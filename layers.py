@@ -5,19 +5,9 @@ Created on Wed Jun 19 20:08:11 2019
 @author: ongunuzaymacar
 
 Script containing custom layer implementations for a family of attention mechanisms in
-TensorFlow with Keras integration, specifically for the upcoming new version 2.0.0. It
-should be noted that every layer is only tested with applications in many-to-one sequence
-generation, but should theoretically be adaptable to other domains with minor tweaks.
-Every layer is a subclass of tf.keras.layers.Layer(). The __init__() method of each custom
-class calls the the initialization method of its parent and defines additional attributes
-specific to each layer. The get_config() method calls the configuration method of its
-parent and defines custom attributes introduced with the layer. If a custom layer includes
-method build(), then it contains trainable parameters. Take the Attention() layer for
-example, the backpropagation of the loss signals which inputs to give more care to and
-hence indicates a change in weights of the layer. Finally, the call() method is the actual
-operation that is performed on the input tensors. compute_output_shape() methods are
-avoided for spacing, and instead comments next to each operation in each layer indicate
-the output shapes. For ease of notation, the following abbreviations are used:
+TensorFlow with Keras integration (tested for TF 2.0). Comments next to each operation
+in each layer indicate the output shapes.
+For ease of notation, the following abbreviations are used:
 i)   B = batch size,      ii) S = sequence length,
 iii) V = vocabulary size, iv) H = number of hidden dimensions
 """
@@ -30,25 +20,7 @@ from tensorflow.keras.layers import Multiply, Lambda, Reshape, Dot, Concatenate,
 class Attention(Layer):
     """
     Layer for implementing two common types of attention mechanisms:
-    i) global (soft) attention, as discussed in "Neural Machine Translation by
-    Jointly Learning to Align and Translate" by Dzmitry Bahdanau et al. This type of
-    attention attends to the entire input state space. Aims to eliminate compression
-    and loss of information in encoder RNNs.
-    ii) local (hard) attention mechanism, as discussed in "Effective Approaches to
-    Attention-based Neural Machine Translation" by Minh-Thang Luong et al. Aims to
-    eliminate the attentive cost of global attention by instead focusing on a small subset
-    of tokens in the input sequence. This window is proposed as [p_t-D, p_t+D] where
-    D=width, and we disregard positions that cross sequence boundaries. The aligned
-    position, p_t, is decided either through a) monotonic alignment: set p_t=t, or
-    b) predictive alignment: set p_t = S*sigmoid(FC1(tanh(FC2(h_t))) where
-    fully-connected layers are trainable weight matrices. Since yielding an integer index
-    value is undifferentiable due to tf.cast() and other methods, this implementation
-    instead derives a aligned position float value and uses Gaussian distribution to
-    adjust the attention weights of all source hidden states instead of slicing the actual
-    window. We also propose an experimental alignment type, c) completely predictive
-    alignment: set p_t as in ii), but apply it to all source hidden states (h_s) instead
-    of the target hidden state (h_t). Then, choose @window_width positions to build
-    the context vector and zero out the rest.
+    i) global (soft) attention, and  ii) local (hard) attention,
 
     The setting use_bias=False converts the Dense() layers into annotation weight matrices.
     Softmax activation ensures that all weights sum up to 1.
@@ -59,7 +31,7 @@ class Attention(Layer):
 
     SUGGESTION: If model doesn't converge, increase either the hidden size of the RNN
     model, the batch size of the model, or the param @size. If test accuracy is low,
-    decrease instead.
+    decrease these hyperparameters instead.
 
     NOTE: This implementation takes the hidden states associted with the last timestep as
     the target hidden state (h_t) as suggested by @felixhao28 in i), whereas originally
@@ -222,18 +194,9 @@ class Attention(Layer):
 
 class SelfAttention(Layer):
     """
-    Layer for implementing self-attention mechanism, first introduced in "Long Short-Term
-    Memory-Networks for Machine Reading" by Jianpeng Cheng et al. This type of attention
-    relates different positions of the same input sequence. Aim is same as Attention()
-    layers. This particular implementation follows "A Structured Self-Attentive Sentence
-    Embedding" by Zhouhan Lin et al. Weight variables were preferred over Dense() layers
-    in implementation because they allow easy identification of shapes. Softmax activation
-    ensures that all weights sum up to 1. The paper suggests adding an extra loss
-    parameter to the model to prevent the redundancy problems of the embedding matrix if
-    the attention mechanism always provides similar annotation weights. The paper also
-    argues that there exists multiple components in a sentence that form the overall
-    semantics, and hence propose multiple hops of attention extracted from the same input
-    sequence.
+    Layer for implementing self-attention mechanism. Weight variables were preferred over
+    Dense() layers in implementation because they allow easy identification of shapes.
+    Softmax activation ensures that all weights sum up to 1.
 
     @param size (int): a.k.a attension length, number of hidden units to decode the
            attention before the softmax activation and becoming annotation weights
