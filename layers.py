@@ -176,6 +176,9 @@ class Attention(Layer):
                 aligned_position = Multiply()([aligned_position, onehot_vector]) # (B, S)
                 aligned_position = Reshape(target_shape=(sequence_length, 1))(aligned_position) # (B, S, 1)
                 source_hidden_states = Multiply()([inputs, aligned_position]) # (B, S*=S(D), H)
+                ## Scale back-to approximately original hidden state values ##
+                aligned_position += 1 # (B, S, 1)
+                source_hidden_states /= aligned_position # (B, S*=S(D), H)
 
         ## Compute alignment score through specified function ##
         if 'dot' in self.score_function:
