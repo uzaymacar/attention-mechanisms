@@ -166,7 +166,7 @@ class Attention(Layer):
                 aligned_position = self.v_p(aligned_position) # (B, S, 1)
                 aligned_position = Activation('sigmoid')(aligned_position) # (B, S, 1)
                 ## Only keep top D values out of the sigmoid activation, and zero-out the rest ##
-                aligned_position = tf.squeeze(aligned_position) # (B, S)
+                aligned_position = tf.squeeze(aligned_position, axis=-1) # (B, S)
                 top_probabilities = tf.nn.top_k(input=aligned_position,
                                                 k=self.window_width,
                                                 sorted=False) # (values:(B, D), indices:(B, D))
@@ -174,7 +174,7 @@ class Attention(Layer):
                                            depth=sequence_length) # (B, D, S)
                 onehot_vector = tf.reduce_sum(onehot_vector, axis=1) # (B, S)
                 aligned_position = Multiply()([aligned_position, onehot_vector]) # (B, S)
-                aligned_position = Reshape(target_shape=(sequence_length, 1))(aligned_position) # (B, S, 1)
+                aligned_position = tf.expand_dims(aligned_position, axis=-1) # (B, S, 1)
                 source_hidden_states = Multiply()([inputs, aligned_position]) # (B, S*=S(D), H)
                 ## Scale back-to approximately original hidden state values ##
                 aligned_position += 1 # (B, S, 1)
