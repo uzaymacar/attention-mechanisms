@@ -47,25 +47,26 @@ the context vector and zero out the rest.
 Each function is trying to compute an alignment score given a target hidden state (```h_t```) and source hidden states (```h_s```).
 
 ### Dot Product
-<img src="https://latex.codecogs.com/svg.latex?\Large&space;score(h_t, h_s)=h_t^\intercal \cdot h_s" title="dot product" />
+![Dot Product](https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=h_t^\intercal&space;\cdot&space;h_s)
 
 ### Scaled Dot Product
-<img src="https://latex.codecogs.com/svg.latex?\Large&space;score(h_t, h_s)=\frac{h_t^\intercal \cdot h_s}{\sqrt{H}}" title="scaled dot product" />
+![Scaled Dot Product](https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=\frac{h_t^\intercal&space;\cdot&space;h_s}{\sqrt{H}})
 
 where ```H``` is the number of hidden states given by the encoder RNN.
 
 ### General
-<img src="https://latex.codecogs.com/svg.latex?\Large&space;score(h_t, h_s)=h_t^\intercal \cdot W_a \cdot h_s" title="general" />
+![General](https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=h_t^\intercal&space;\cdot&space;W_a&space;\cdot&space;h_s)
 
 where ```W_a``` is a trainable weight matrix.
 
 ### Concat
-<img src="https://latex.codecogs.com/svg.latex?\Large&space;score(h_t, h_s)=v_a^\intercal \cdot \tanh(W_a[h_t:h_s])" title="concat" />
+![Concat](https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=v_a^\intercal&space;\cdot&space;\tanh(W_a[h_t:h_s]))
 
 where ```v_a``` and ```W_a``` are trainable weight matrices.
 
 ### Location-Based
-<img src="https://latex.codecogs.com/svg.latex?\Large&space;score(h_t, h_s)=W_a \cdot h_t" title="scaled dot product" />
+![Location Based](https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=W_a&space;\cdot&space;h_t)
+
 
 where ```W_a``` is a trainable weight matrix.
 
