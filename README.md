@@ -103,6 +103,9 @@ generation, but should theoretically be adaptable to other domains with minor tw
 ## Examples
 These layers can be plugged-in to your projects (whether language models or other types of RNNs) within seconds, just like any other TensorFlow layer with Keras integration. See the example below:
 ```
+from tensorflow.keras.layers import Input, Embedding, LSTM, Dense
+from layers import attention, SelfAttention
+
 X = Input(shape=(sequence_length,), batch_size=batch_size) # define input layer for summary
 ## Token Embedding (Pretrained or Not) ##
 embedding = Embedding(input_dim=vocabulary_size, output_dim=embedded_dimensions)(X)
