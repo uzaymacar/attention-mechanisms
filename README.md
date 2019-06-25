@@ -7,11 +7,6 @@
    * [Global Attention](#global-attention)
    * [Local Attention](#local-attention)
 3. [Alignment Functions](#alignment-functions)
-   * [Dot Product](#dot-product)
-   * [Scaled Dot Product](#scaled-dot-product)
-   * [General](#general)
-   * [Concat](#concat)
-   * [Location-Based](#location-based)
 4. [Implementation Details](#implementation-details)
 5. [Examples](#examples)
 6. [Resources](#resources)
@@ -57,38 +52,16 @@ the context vector and zero out the rest.
 
 Each function is trying to compute an alignment score given a target hidden state (```h_t```) and source hidden states (```h_s```).
 
-### Dot Product
-<p align="center">
-<img src="https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=h_t^\intercal&space;\cdot&space;h_s">
-</div>
+| Name | Formula for <img src="https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)"> | Defined by |
+| ------- | --- | --- |
+| Dot Product | <img src="https://latex.codecogs.com/png.latex?\Large&space;h_t^\intercal&space;\cdot&space;h_s"> | Luong et al. (2015) |
+| Scaled Dot Product | <img src="https://latex.codecogs.com/png.latex?\Large&space;\frac{h_t^\intercal&space;\cdot&space;h_s}{\sqrt{H}}"> | Vaswani et al. (2017) |
+| General | <img src="https://latex.codecogs.com/png.latex?\Large&space;h_t^\intercal&space;\cdot&space;W_a&space;\cdot&space;h_s"> | Luong et al. (2015) |
+| Concat | <img src="https://latex.codecogs.com/png.latex?\Large&space;v_a^\intercal&space;\cdot&space;\tanh(W_a[h_t:h_s])"> | Bahdanau et al. (2015) |
+| Location | <img src="https://latex.codecogs.com/png.latex?\Large&space;W_a&space;\cdot&space;h_t"> | Luong et al. (2015) |
 
-### Scaled Dot Product
-<p align="center">
-<img src="https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=\frac{h_t^\intercal&space;\cdot&space;h_s}{\sqrt{H}}">
-</p>
+where ```H``` is the number of hidden states given by the encoder RNN, and where ```W_a``` and ```v_a``` are trainable weight matrices.
 
-where ```H``` is the number of hidden states given by the encoder RNN.
-
-### General
-<p align="center">
-<img src="https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=h_t^\intercal&space;\cdot&space;W_a&space;\cdot&space;h_s">
-</p>
-
-where ```W_a``` is a trainable weight matrix.
-
-### Concat
-<p align="center">
-<img src="https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=v_a^\intercal&space;\cdot&space;\tanh(W_a[h_t:h_s])">
-</p>
-
-where ```v_a``` and ```W_a``` are trainable weight matrices.
-
-### Location-Based
-<p align="center">
-<img src="https://latex.codecogs.com/png.latex?\Large&space;score(h_t,&space;h_s)=W_a&space;\cdot&space;h_t">
-</p>
-
-where ```W_a``` is a trainable weight matrix.
 
 ## Implementation Details
 * It should be noted that every layer is only tested with applications in many-to-one sequence
