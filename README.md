@@ -65,7 +65,7 @@ where ```H``` is the number of hidden states given by the encoder RNN, and where
 
 ## Implementation Details
 * It should be noted that every layer is only tested with applications in many-to-one sequence
-generation, but should theoretically be adaptable to other domains with minor tweaks. One obvious idea is to wrap the layers with ```tf.keras.layers.TimeDistributed()```.
+generation, but should theoretically be adaptable to other domains with minor tweaks. One obvious idea is to wrap the layers with ```tf.keras.layers.TimeDistributed()``` for many-to-many sequence tasks.
 * Every layer is a subclass of ```tf.keras.layers.Layer()```.
 * The ```__init__()``` method of each custom class calls the the initialization method of its parent and defines additional attributes specific to each layer.
 * The ```get_config()``` method calls the configuration method of its parent and defines custom attributes introduced with the layer.
