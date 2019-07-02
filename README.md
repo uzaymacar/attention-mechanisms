@@ -75,9 +75,10 @@ generation, but should theoretically be adaptable to other domains with minor tw
 
 ## Examples
 These layers can be plugged-in to your projects (whether language models or other types of RNNs) within seconds, just like any other TensorFlow layer with Keras integration. See the example below:
+See the below general-purpose example for instance.
 ```
 from tensorflow.keras.layers import Input, Embedding, LSTM, Dense
-from layers import Attention, SelfAttention
+from layers import Attention
 
 X = Input(shape=(sequence_length,), batch_size=batch_size) # define input layer for summary
 ## Token Embedding (Pretrained or Not) ##
@@ -90,6 +91,37 @@ decoder = Attention(size=attention_size, alignment_type=attention_type)(encoder)
 Y = Dense(units=vocabulary_size, activation='softmax')(decoder)
 ```
 where ```alignment_type``` is one of ```'global'```, ```'local-m'```, ```'local-p'```, and ```'local-p*'```. For self attention, call the ```SelfAttention(size=attention_size)``` layer instead.
+Check below subtopics for more examples, analyses, and comparisons.
+
+### Sentiment Classification
+You can find a sentiment classification (many-to-one) example on IMBD reviews dataset (https://www.tensorflow.org/api_docs/python/tf/keras/datasets/imdb) inside ```examples/sentiment_classification.py```.
+This example compares three model (all word-level) types and aims to measure the effectiveness of the implemented self-attention layer. Refer to the below table for metrics:
+
+| Model ID | Maximum Validation Binary Accuracy |
+| -------- | ---------------------------------- |
+| Simple Multi-Layer Perceptron Model | 0.8730 |
+| Simple Multi-Layer Perceptron Model w/ Self-Attention (Non-Penalized) | **0.8886** |
+| Simple Multi-Layer Perceptron Model w/ Self-Attention (Penalized) | 0.8822 |
+
+### Text Generation
+You can find a text generation (many-to-one) example on Shakespeare dataset (https://www.tensorflow.org/beta/tutorials/text/text_generation) inside ```examples/text_generation.py```.
+This example compares ? model (all character-level) types and aims to measure the effectiveness of the implement attention and self-attention layers. Refer to the below table for metrics:
+
+| Model ID | Maximum Validation Perplexity | Maximum Validation Categorical Accuracy |
+| -------- | ----------------------------- | --------------------------------------- |
+| BiLSTM Model | 0.8730 |
+| BiLSTM Model w/ Self-Attention (Non-Penalized) | **0.8886** |
+| BiLSTM Model w/ Self-Attention (Penalized) | 0.8822 |
+| BiLSTM Model w/ Global Attention |
+| BiLSTM Model w/ Local-m Attention |
+| BiLSTM Model w/ Local-p Attention |
+| BiLSTM Model w/ Local-p* Attention |
+
+
+### Machine Translation
+
+### Question Answering
+
 
 ## Resources
 * All papers mentioned above.
