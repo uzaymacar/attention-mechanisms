@@ -9,10 +9,13 @@
 3. [Alignment Functions](#alignment-functions)
 4. [Implementation Details](#implementation-details)
 5. [Examples](#examples)
+   * [Sentiment Classification](#sentiment-classification)
+   * [Text Generation](#text-generation)
+   * [Machine Translation](#machine-translation)
 6. [Resources](#resources)
 
 ## Introduction
-This repository includes custom layer implementations for a whole family of attention mechanisms, compatible with TensorFlow and Keras integration. Attention mechanisms have transformed the landscape of machine translation, and their utilization in other domains of NLP are increasing by day. In a broader sense, they aim to eliminate compression and loss of information due to fixed-length encoding of hidden states derived from input sequences in RNNs. The layers in this repository are tailored specifically for many-to-one sequence tasks, such as sentiment classification and language modeling.
+This repository includes custom layer implementations for a whole family of attention mechanisms, compatible with TensorFlow and Keras integration. Attention mechanisms have transformed the landscape of machine translation, and their utilization in other domains of NLP are increasing day by day. In a broader sense, they aim to eliminate compression and loss of information due to fixed-length encoding of hidden states derived from input sequences in RNNs. The layers in this repository can be used for both **many-to-many** and **many-to-one** sequence tasks. Applications include *sentiment classification*, *text generation*, *machine translation*, and *question answering*.
 
 ## Attention Types
 <p align="center">
@@ -62,10 +65,11 @@ Each function is trying to compute an alignment score given a target hidden stat
 
 where ```H``` is the number of hidden states given by the encoder RNN, and where ```W_a``` and ```v_a``` are trainable weight matrices.
 
-
 ## Implementation Details
-* It should be noted that every layer is only tested with applications in many-to-one sequence
-generation, but should theoretically be adaptable to other domains with minor tweaks. One obvious idea is to wrap the layers with ```tf.keras.layers.TimeDistributed()``` for many-to-many sequence tasks.
+* As of now, all attention mechanisms in this repository are successfully tested with applications in both many-to-one and many-to-many sequence tasks. Check the
+*Examples* subsection for example applications.
+* It should be noted that there is no claim that the attention mechanisms represented in this repository is optimized in anyway; there is still a lot of room for
+improvement.
 * Every layer is a subclass of ```tf.keras.layers.Layer()```.
 * The ```__init__()``` method of each custom class calls the the initialization method of its parent and defines additional attributes specific to each layer.
 * The ```get_config()``` method calls the configuration method of its parent and defines custom attributes introduced with the layer.
@@ -105,26 +109,35 @@ This example compares three model (all word-level) types and aims to measure the
 
 ### Text Generation
 You can find a text generation (many-to-one) example on Shakespeare dataset (https://www.tensorflow.org/beta/tutorials/text/text_generation) inside ```examples/text_generation.py```.
-This example compares ? model (all character-level) types and aims to measure the effectiveness of the implement attention and self-attention layers. Refer to the below table for metrics:
+This example compares 7 model (all character-level) types and aims to measure the effectiveness of the implemented attention and self-attention layers. Refer to the below table for metrics:
 
-| Model ID | Maximum Validation Perplexity | Maximum Validation Categorical Accuracy |
+| Model ID | Minimum Validation Perplexity | Maximum Validation Categorical Accuracy |
 | -------- | ----------------------------- | --------------------------------------- |
-| BiLSTM Model | 0.8730 |
-| BiLSTM Model w/ Self-Attention (Non-Penalized) | **0.8886** |
-| BiLSTM Model w/ Self-Attention (Penalized) | 0.8822 |
+| BiLSTM Model | 6.0089 | 0.5959 | 
+| BiLSTM Model w/ Self-Attention (Non-Penalized) | 6.3194 | 0.6016 |
 | BiLSTM Model w/ Global Attention |
 | BiLSTM Model w/ Local-m Attention |
 | BiLSTM Model w/ Local-p Attention |
 | BiLSTM Model w/ Local-p* Attention |
 
-
 ### Machine Translation
+You can find a machine translation (many-to-many) example on English-to-Spanish dataset (http://www.manythings.org/anki/) inside ```examples/machine_translation.py```.
+This example pretty much follows https://www.tensorflow.org/beta/tutorials/text/nmt_with_attention with minimal adaptions. It compares 5 model (all word-level) types and
+aims to measure the effectiveness of the implemented attention layer. Refer to the below table for metrics:
 
-### Question Answering
+| Model ID | Minimum Validation Perplexity | Maximum Validation Categorical Accuracy |
+| -------- | ----------------------------- | --------------------------------------- |
+| Encoder-Decoder Model | | | 
+| Encoder-Decoder Model w/ Global Attention | | | 
+| Encoder-Decoder Model w/ Local-m Attention | | | 
+| Encoder-Decoder Model w/ Local-p Attention | | | 
+| Encoder-Decoder Model w/ Local-p* Attention | | | 
 
 
 ## Resources
 * All papers mentioned above.
-* https://www.tensorflow.org/beta/tutorials/text/nmt_with_attention
-* https://github.com/philipperemy/keras-attention-mechanism/issues/14
 * https://lilianweng.github.io/lil-log/2018/06/24/attention-attention.html
+* https://github.com/philipperemy/keras-attention-mechanism/issues/14
+* https://www.tensorflow.org/beta/tutorials/text/text_generation
+* https://www.tensorflow.org/beta/tutorials/text/nmt_with_attention
+* https://machinelearningmastery.com/predict-sentiment-movie-reviews-using-deep-learning/
