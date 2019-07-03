@@ -187,6 +187,7 @@ class Attention(Layer):
             attention_score = attention_score[:, :, 0]  # (B, S*)
 
         attention_weights = Activation('softmax')(attention_score)  # (B, S*)
+
         if self.alignment_type == 'local-p':  # Gaussian Distribution
             gaussian_estimation = lambda s: tf.exp(-tf.square(s - aligned_position) /
                                                    (2 * tf.square(self.window_width / 2)))
