@@ -12,10 +12,11 @@
    * [Sentiment Classification](#sentiment-classification)
    * [Text Generation](#text-generation)
    * [Machine Translation](#machine-translation)
-6. [Resources](#resources)
+6. [Contributing](#contributing)
+7. [Resources](#resources)
 
 ## Introduction
-This repository includes custom layer implementations for a whole family of attention mechanisms, compatible with TensorFlow and Keras integration. Attention mechanisms have transformed the landscape of machine translation, and their utilization in other domains of NLP are increasing day by day. In a broader sense, they aim to eliminate compression and loss of information due to fixed-length encoding of hidden states derived from input sequences in RNNs. The layers in this repository can be used for both **many-to-many** and **many-to-one** sequence tasks. Applications include *sentiment classification*, *text generation*, *machine translation*, and *question answering*.
+This repository includes custom layer implementations for a whole family of attention mechanisms, compatible with TensorFlow and Keras integration. Attention mechanisms have transformed the landscape of machine translation, and their utilization in other domains of NLP are increasing day by day. In a broader sense, they aim to eliminate compression and loss of information due to fixed-length encoding of hidden states derived from input sequences in RNNs. The layers in this repository can be used for both **many-to-many** and **many-to-one** sequence tasks. Applications include *sentiment classification*, *text generation*, *machine translation*, and *question answering*. It is also worthwhile to mention that this project will soon be **deployed** as a Python package. Check *Contributing* subsection on how to contribute to this project.
 
 ## Attention Types
 <p align="center">
@@ -98,7 +99,7 @@ where ```alignment_type``` is one of ```'global'```, ```'local-m'```, ```'local-
 Check below subtopics for more examples, analyses, and comparisons.
 
 ### Sentiment Classification
-You can find a sentiment classification (many-to-one) example on IMBD reviews dataset (https://www.tensorflow.org/api_docs/python/tf/keras/datasets/imdb) inside ```examples/sentiment_classification.py```.
+You can find a sentiment classification (many-to-one) example on [IMBD Reviews Dataset](https://www.tensorflow.org/api_docs/python/tf/keras/datasets/imdb) inside ```examples/sentiment_classification.py```.
 This example compares three model (all word-level) types and aims to measure the effectiveness of the implemented self-attention layer. Refer to the below table for metrics:
 
 | Model ID | Maximum Validation Binary Accuracy |
@@ -108,7 +109,7 @@ This example compares three model (all word-level) types and aims to measure the
 | Simple Multi-Layer Perceptron Model w/ Self-Attention (Penalized) | 0.8822 |
 
 ### Text Generation
-You can find a text generation (many-to-one) example on Shakespeare dataset (https://www.tensorflow.org/beta/tutorials/text/text_generation) inside ```examples/text_generation.py```.
+You can find a text generation (many-to-one) example on [Shakespeare Dataset](https://www.tensorflow.org/beta/tutorials/text/text_generation) inside ```examples/text_generation.py```.
 This example compares 7 model (all character-level) types and aims to measure the effectiveness of the implemented attention and self-attention layers. Refer to the below table for metrics:
 
 | Model ID | Minimum Validation Perplexity | Maximum Validation Categorical Accuracy |
@@ -122,7 +123,7 @@ This example compares 7 model (all character-level) types and aims to measure th
 
 ### Machine Translation
 You can find a machine translation (many-to-many) example on English-to-Spanish dataset (http://www.manythings.org/anki/) inside ```examples/machine_translation.py```.
-This example pretty much follows https://www.tensorflow.org/beta/tutorials/text/nmt_with_attention with minimal adaptions. It compares 5 model (all word-level) types and
+This example pretty much follows [TensorFlow's Machine Translation Example](https://www.tensorflow.org/beta/tutorials/text/nmt_with_attention) with minimal adaptions. It compares 5 model (all word-level) types and
 aims to measure the effectiveness of the implemented attention layer. Refer to the below table for metrics:
 
 | Model ID | Minimum Validation Perplexity | Maximum Validation Categorical Accuracy |
@@ -133,11 +134,13 @@ aims to measure the effectiveness of the implemented attention layer. Refer to t
 | Encoder-Decoder Model w/ Local-p Attention | | | 
 | Encoder-Decoder Model w/ Local-p* Attention | | | 
 
+## Contributing
+Whether it is bugs you have encountered, performance concerns, or any kind of input you have in mind, this is the perfect time to share them! Check ```CONTRIBUTING.md``` for more information and guidelines on this topic.
 
 ## Resources
 * All papers mentioned above.
-* https://lilianweng.github.io/lil-log/2018/06/24/attention-attention.html
-* https://github.com/philipperemy/keras-attention-mechanism/issues/14
-* https://www.tensorflow.org/beta/tutorials/text/text_generation
-* https://www.tensorflow.org/beta/tutorials/text/nmt_with_attention
-* https://machinelearningmastery.com/predict-sentiment-movie-reviews-using-deep-learning/
+* [Lilian Weng's Beautiful Blog Post](https://lilianweng.github.io/lil-log/2018/06/24/attention-attention.html)
+* [Philippe Remy's Attention Implementations & Corresponding Issues](https://github.com/philipperemy/keras-attention-mechanism/issues/14)
+* [TensorFlow's Text Generation Example](https://www.tensorflow.org/beta/tutorials/text/text_generation)
+* [TensorFlow's Machine Translation Example](https://www.tensorflow.org/beta/tutorials/text/nmt_with_attention)
+* [Jason Brownlee's Amazing Blog Post](https://machinelearningmastery.com/predict-sentiment-movie-reviews-using-deep-learning/)
