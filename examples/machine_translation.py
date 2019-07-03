@@ -75,8 +75,8 @@ def unicode_to_ascii(string):
 
 def preprocess_sentence(sentence):
     """
-    Function to preprocess sentences according to machine translation conventions. Includes general
-    cleaning operations and removal of accents.
+    Function to preprocess sentences according to machine translation conventions. Includes
+    conversion to ascii characters, general cleaning operations, and removal of accents.
     """
     sentence = unicode_to_ascii(sentence.lower().strip())
     # Creates a space between a word and the punctuation following it, ex: "hi dad." => "hi dad ."
@@ -177,8 +177,9 @@ elif config == 4:
 # Connection between Encoder & Decoder (input_sequence_length -> target_sequence_length)
 model.add(RepeatVector(target_sequence_length))
 # ii) Decoder Model
-# Recurrent Model
+# Recurrent Layer
 model.add(Bidirectional(CuDNNLSTM(units=512, return_sequences=True)))
+# Prediction Layer
 model.add(TimeDistributed(Dense(units=target_vocabulary_size, activation='softmax')))
 
 # Compile model
