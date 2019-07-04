@@ -149,10 +149,12 @@ class Attention(Layer):
 
         # Singular form is preserved for many-to-one, plural form is preserved for many-to-many
         target_hidden_state, target_hidden_state_reshaped, target_hidden_states = None, None, None
+
         if self.context == 'many-to-one':
             # Get h_t, the current (target) hidden state as the last timestep of input sequence
             target_hidden_state = Lambda(function=lambda x: x[:, -1, :])(inputs)                    # (B, H)
             target_hidden_state_reshaped = Reshape((1, inputs.shape[2]))(target_hidden_state)       # (B, 1, H)
+
         elif self.context == 'many-to-many':
             # Get h_t, the current (target) hidden states from all timesteps of target sequence
             target_hidden_states = inputs[1]                                                        # (B, S', H)
@@ -273,9 +275,11 @@ class Attention(Layer):
                 target_hidden_state if self.context == 'many-to-one' else target_hidden_states
             )
             attention_score = Activation('softmax')(weighted_target_state)                          # <1>:(B, H), <M>:(B, S', H)
+
             if self.context == 'many-to-many':
                 attention_score = Flatten()(attention_score)                                        # (B, S'*H)
             attention_score = RepeatVector(inputs.shape[1])(attention_score)                        # <1>:(B, S*, H), <M>:(B, S*, S'*H)
+
             if self.context == 'many-to-many':
                 attention_score = Reshape((inputs.shape[1],                                         # (B, S*, S', H)
                                            target_hidden_states.shape[1],
@@ -324,7 +328,7 @@ class Attention(Layer):
             context_vector = Dot(axes=[2, 1])([attention_weights, source_hidden_states])            # (B, S', H)
             combined_information = Concatenate()([context_vector, target_hidden_states])            # (B, S', 2*H)
 
-        attention_vector = self.attention_vector(combined_information)                              # <1>:(B, self.size), <M>:(B, S', self.size)
+        attention_vector = self.attention_vector(combined_information)                              # <1>:(B, size), <M>:(B, S', size)
 
         return attention_vector
 
@@ -359,11 +363,11 @@ class SelfAttention(Layer):
 
     def build(self, input_shape):
         self.W1 = self.add_weight(name='W1',
-                                  shape=(self.size, input_shape[2]),  # (self.size, H)
+                                  shape=(self.size, input_shape[2]),                                # (size, H)
                                   initializer='glorot_uniform',
                                   trainable=True)
         self.W2 = self.add_weight(name='W2',
-                                  shape=(self.num_hops, self.size),  # (self.num_hops, self.size)
+                                  shape=(self.num_hops, self.size),                                 # (num_hops, size)
                                   initializer='glorot_uniform',
                                   trainable=True)
         super(SelfAttention, self).build(input_shape)
@@ -371,18 +375,18 @@ class SelfAttention(Layer):
     def call(self, inputs):  # (B, S, H)
         # Expand weights to include batch size through implicit broadcasting
         W1, W2 = self.W1[None, :, :], self.W2[None, :, :]
-        hidden_states_transposed = Permute(dims=(2, 1))(inputs)  # (B, H, S)
-        attention_score = tf.matmul(W1, hidden_states_transposed)  # (B, self.size, S)
-        attention_score = Activation('tanh')(attention_score)  # (B, self.size, S)
-        attention_weights = tf.matmul(W2, attention_score)  # (B, self.num_hops, S)
-        attention_weights = Activation('softmax')(attention_weights)  # (B, self.num_hops, S)
-        embedding_matrix = tf.matmul(attention_weights, inputs)  # (B, self.num_hops, H)
-        embedding_matrix_flattened = Flatten()(embedding_matrix)  # (B, self.num_hops*H)
+        hidden_states_transposed = Permute(dims=(2, 1))(inputs)                                     # (B, H, S)
+        attention_score = tf.matmul(W1, hidden_states_transposed)                                   # (B, size, S)
+        attention_score = Activation('tanh')(attention_score)                                       # (B, size, S)
+        attention_weights = tf.matmul(W2, attention_score)                                          # (B, num_hops, S)
+        attention_weights = Activation('softmax')(attention_weights)                                # (B, num_hops, S)
+        embedding_matrix = tf.matmul(attention_weights, inputs)                                     # (B, num_hops, H)
+        embedding_matrix_flattened = Flatten()(embedding_matrix)                                    # (B, num_hops*H)
 
         if self.use_penalization:
-            attention_weights_transposed = Permute(dims=(2, 1))(attention_weights)  # (B, S, self.num_hops)
-            product = tf.matmul(attention_weights, attention_weights_transposed)  # (B, self.num_hops, self.num_hops)
-            identity = tf.eye(self.num_hops, batch_shape=(inputs.shape[0],))  # (B, self.num_hops, self.num_hops)
+            attention_weights_transposed = Permute(dims=(2, 1))(attention_weights)                  # (B, S, num_hops)
+            product = tf.matmul(attention_weights, attention_weights_transposed)                    # (B, num_hops, num_hops)
+            identity = tf.eye(self.num_hops, batch_shape=(inputs.shape[0],))                        # (B, num_hops, num_hops)
             frobenius_norm = tf.sqrt(tf.reduce_sum(tf.square(product - identity)))  # distance
             self.add_loss(self.penalty_coefficient * frobenius_norm)  # loss
 
