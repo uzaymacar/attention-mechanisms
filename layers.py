@@ -7,20 +7,32 @@ Created on Wed Jun 19 20:08:11 2019
 Script containing custom layer implementations for a family of attention mechanisms in TensorFlow
 with Keras integration (tested for TF 2.0). Comments next to each operation in each layer indicate
 the output shapes. For ease of notation, the following abbreviations are used:
-i)   B = batch size,      ii) S = sequence length,
-iii) V = vocabulary size, iv) H = number of hidden dimensions
+i)   B  = batch size,
+ii)  S  = sequence length (many-to-one) OR input sequence length (many-to-many),
+iii) S' = target sequence length (many-to-many),
+iv)  S* = optimized (by 'local' approach, sometimes referred to as 'alignment length') sequence
+          length,
+v)   S- = the larger of the sequence lengths for many-to-many scenarios,
+vi)  V  = vocabulary size
+vii) H  = number of hidden dimensions
+
+Additionally, if a tensors shape differs for many-to-one and many-to-many scenarios, <1> and <M>
+tags will respectively identify the corresponding shapes. If no distinction is made, assume that
+the shape indicated is applicable for both scenarios.
 """
 
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Layer, Dense, Flatten, Activation, Permute
-from tensorflow.keras.layers import Multiply, Lambda, Reshape, Dot, Concatenate, RepeatVector
+from tensorflow.keras.layers import Multiply, Lambda, Reshape, Dot, Concatenate, RepeatVector, \
+    TimeDistributed, Permute
 
 
 class Attention(Layer):
     """
-    Layer for implementing two common types of attention mechanisms: i) global (soft) attention,
-    and ii) local (hard) attention.
+    Layer for implementing two common types of attention mechanisms, i) global (soft) attention
+    and ii) local (hard) attention, for two types of sequence tasks, i) many-to-one and
+    ii) many-to-many.
 
     The setting use_bias=False converts the Dense() layers into annotation weight matrices. Softmax
     activation ensures that all weights sum up to 1. Read more here to make more sense of the code
@@ -33,11 +45,14 @@ class Attention(Layer):
     batch size of the model, or the param @size. If test accuracy is low, decrease these
     hyperparameters instead.
 
-    NOTE: This implementation takes the hidden states associated with the last timestep as the
-    target hidden state (h_t) as suggested by @felixhao28 in i) for many-to-one scenarios, whereas
-    originally attention was proposed for many-to-many scenarios. Hence, when trying to predict
-    what word (token) comes after sequence ['I', 'love', 'biscuits', 'and'], we take h('and') with
-    shape (1, H) as the target hidden state.
+    NOTE: This implementation takes the hidden states associated with the last timestep of the input
+    sequence as the target hidden state (h_t) as suggested by @felixhao28 in i) for many-to-one
+    scenarios. Hence, when trying to predict what word (token) comes after sequence ['I', 'love',
+    'biscuits', 'and'], we take h('and') with shape (1, H) as the target hidden state. For
+    many-to-many scenarios, it takes the hidden state associated with the timestep that is being
+    currently iterated in the target sequence, usually by a decoder-like architecture. One thing
+    to keep in mind is that ALL decoder hidden states are collected and aligned with encoder
+    hidden states at once for simplification purposes. This shouldn't have an effect on performance.
 
     @param (int) size: size of attention vector or attention length; number of hidden units to
            decode the attention to with dense layer, presumably before being fed to the final
@@ -61,9 +76,10 @@ class Attention(Layer):
             raise ValueError("Argument for param @context is not recognized")
         if alignment_type not in ['global', 'local-m', 'local-p', 'local-p*']:
             raise ValueError("Argument for param @alignment_type is not recognized")
-        if alignment_type == 'global':
-            if window_width is not None:
-                raise ValueError("Can't use windowed approach with global attention")
+        if alignment_type == 'global' and window_width is not None:
+            raise ValueError("Can't use windowed approach with global attention")
+        if context == 'many-to-many' and alignment_type == 'local-p*':
+            raise ValueError("Can't use local-p* approach in many-to-many scenarios")
         if score_function not in ['dot', 'general', 'location', 'concat', 'scaled_dot']:
             raise ValueError("Argument for param @score_function is not recognized")
         super(Attention, self).__init__(**kwargs)
@@ -82,130 +98,233 @@ class Attention(Layer):
         return base_config
 
     def build(self, input_shape):  # Build weight matrices for trainable, adaptive parameters
+        if self.context == 'many-to-many':
+            input_sequence_length, target_sequence_length = input_shape[0][1], input_shape[1][1]
+            input_shape = input_shape[1]
+
+        if self.alignment_type == 'local-m':
+            self.extractor = Dense(units=input_shape[2])
+            self.extractor.build(                                                                   # (B, S*, S-*H)
+                input_shape=(None, None, max(input_sequence_length,
+                                             target_sequence_length)*input_shape[2])
+            )
+            self._trainable_weights += self.KILL_ME.trainable_weights
+
         if 'local-p' in self.alignment_type:
             self.W_p = Dense(units=input_shape[2], use_bias=False)
-            self.W_p.build(input_shape=(None, None, input_shape[2]))  # (B, 1, H)
+            self.W_p.build(input_shape=(None, None, input_shape[2]))                                # (B, 1, H)
             self._trainable_weights += self.W_p.trainable_weights
 
             self.v_p = Dense(units=1, use_bias=False)
-            self.v_p.build(input_shape=(None, None, input_shape[2]))  # (B, 1, H)
+            self.v_p.build(input_shape=(None, None, input_shape[2]))                                # (B, 1, H)
             self._trainable_weights += self.v_p.trainable_weights
 
-        if 'dot' not in self.score_function: # weight matrix not utilized for 'dot' function
+        if 'dot' not in self.score_function:  # weight matrix not utilized for 'dot' function
             self.W_a = Dense(units=input_shape[2], use_bias=False)
-            self.W_a.build(input_shape=(None, None, input_shape[2]))  # (B, S*, H)
+            self.W_a.build(input_shape=(None, None, input_shape[2]))                                # (B, S*, H)
             self._trainable_weights += self.W_a.trainable_weights
 
-        if self.score_function == 'concat': # define additional weight matrices
+        if self.score_function == 'concat':  # define additional weight matrices
             self.U_a = Dense(units=input_shape[2], use_bias=False)
-            self.U_a.build(input_shape=(None, None, input_shape[2]))  # (B, 1, H)
+            self.U_a.build(input_shape=(None, None, input_shape[2]))                                # (B, 1, H)
             self._trainable_weights += self.U_a.trainable_weights
 
             self.v_a = Dense(units=1, use_bias=False)
-            self.v_a.build(input_shape=(None, None, input_shape[2]))  # (B, S*, H)
+            self.v_a.build(input_shape=(None, None, input_shape[2]))                                # (B, S*, H)
             self._trainable_weights += self.v_a.trainable_weights
 
         self.attention_vector = Dense(units=self.size, activation='tanh', use_bias=False)
-        if self.context == 'many-to-one':
-            self.attention_vector.build(input_shape=(None, 2*input_shape[2]))  # (B, 2*H)
-        elif self.context == 'many-to-many':
-            self.attention_vector.build(input_shape=(None, input_shape[2]))  # (B, H)
+        self.attention_vector.build(input_shape=(None, 2*input_shape[2]))  # (B, 2*H)
         self._trainable_weights += self.attention_vector.trainable_weights
 
         super(Attention, self).build(input_shape)
 
     def call(self, inputs):
+        # Pass decoder output alongside encoder output for many-to-many scenarios
+        if self.context == 'many-to-many' and not isinstance(inputs, list):
+            raise ValueError("Pass a list=[decoder_output, encoder_output] for @context='many-to-many'")
+        # Pass encoder outputs only for many-to-many scenarios
+        if self.context == 'many-to-one' and isinstance(inputs, list):
+            raise ValueError("Pass single tensor=encoder_output for @context='many-to-one'")
+
+        # Singular form is preserved for many-to-one, plural form is preserved for many-to-many
+        target_hidden_state, target_hidden_state_reshaped, target_hidden_states = None, None, None
+        if self.context == 'many-to-one':
+            # Get h_t, the current (target) hidden state as the last timestep of input sequence
+            target_hidden_state = Lambda(function=lambda x: x[:, -1, :])(inputs)                    # (B, H)
+            target_hidden_state_reshaped = Reshape((1, inputs.shape[2]))(target_hidden_state)       # (B, 1, H)
+        elif self.context == 'many-to-many':
+            # Get h_t, the current (target) hidden states from all timesteps of target sequence
+            target_hidden_states = inputs[1]                                                        # (B, S', H)
+            # As h_t is saved, we can limit inputs to encoder outputs for simplicity
+            inputs = inputs[0]                                                                      # (B, S, H)
+
+        # Get (input) sequence length
         sequence_length = inputs.shape[1]
-        # Get h_t, the current (target) hidden state
-        target_hidden_state = Lambda(function=lambda x: x[:, -1, :])(inputs)  # (B, H)
-        target_hidden_state_reshaped = Reshape(target_shape=(1, inputs.shape[2]))(target_hidden_state)  # (B, 1, H)
 
         # Get h_s, source hidden states through specified attention mechanism
         if self.alignment_type == 'global':  # Global Approach
-            source_hidden_states = inputs  # (B, S*=S, H)
+            source_hidden_states = inputs                                                           # (B, S*=S, H)
 
         elif 'local' in self.alignment_type:  # Local Approach
             if self.window_width is None:  # Automatically set window width
                 self.window_width = sequence_length // 2
 
             if self.alignment_type == 'local-m':  # Monotonic Alignment
-                aligned_position = sequence_length
-                left_border = aligned_position - self.window_width if aligned_position - self.window_width >= 0 else 0
-                source_hidden_states = Lambda(function=lambda x: x[:, left_border:, :])(inputs)  # (B, S*=D, H)
+                if self.context == 'many-to-one':
+                    aligned_position = sequence_length
+                    left_border = int(aligned_position - self.window_width
+                                      if aligned_position - self.window_width >= 0
+                                      else 0)
+                    source_hidden_states = Lambda(lambda x: x[:, left_border:, :])(inputs)          # (B, S*=D, H)
+
+                elif self.context == 'many-to-many':
+                    target_sequence_length = target_hidden_states.shape[1]
+                    # Prepare input and target timesteps for alignment
+                    inputs_flattened = Flatten()(inputs)                                            # (B, S*H)
+                    inputs_expanded = RepeatVector(target_sequence_length)(inputs_flattened)        # (B, S', S*H)
+                    inputs_reshaped = Reshape((target_sequence_length,                              # (B, S', S, H)
+                                               sequence_length,
+                                               target_hidden_states.shape[2]))(inputs_expanded)
+                    # Get minimum sequence length for monotonic alignment
+                    alignment_length = min(target_sequence_length, sequence_length)
+                    # Get one-hot encoded center positions of window ex. [[1 0 0], [0 1 0], [0 0 1]]
+                    aligned_position = tf.one_hot(                                                  # (S*, S*)
+                        indices=np.array([i for i in range(alignment_length)]),
+                        depth=alignment_length
+                    )
+                    # To simulate a window width, get one-hot encoded positions for both directions
+                    for step in range(self.window_width // 2):
+                        # Forward direction from center of window: center ->
+                        aligned_position_forward = tf.one_hot(                                      # (S*, S*)
+                            indices=np.array([window_index+step
+                                              if window_index+step < alignment_length else 0
+                                              for window_index in range(alignment_length)]),
+                            depth=alignment_length)
+                        # Backward direction from center of window: <- center
+                        aligned_position_backward = tf.one_hot(                                     # (S*, S*)
+                            indices=np.array([window_index-step
+                                              if window_index-step >= 0 else 0
+                                              for window_index in range(alignment_length)]),
+                            depth=alignment_length)
+                        # Update aligned position by adding both directions
+                        aligned_position += aligned_position_forward + aligned_position_backward    # (S*, S*)
+
+                    inputs_flattened = Flatten()(inputs_reshaped)                                   # (B, S'*S*H)
+                    inputs_reshaped = Reshape(                                                      # (B, S*, S-*H)
+                        (alignment_length, (sequence_length
+                                            if sequence_length != alignment_length
+                                            else target_sequence_length)*inputs.shape[2])
+                    )(inputs_flattened)
+                    aligned_position = RepeatVector(inputs.shape[0])(aligned_position)              # (S*, B, S*)
+                    aligned_position = tf.transpose(aligned_position, perm=(1, 0, 2))               # (B, S*, S*)
+                    source_hidden_states = Dot(axes=[1, 1])([aligned_position, inputs_reshaped])    # (B, S*, S-*H)
+                    source_hidden_states = self.extractor(source_hidden_states)                     # (B, S*, H)
 
             elif self.alignment_type == 'local-p':  # Predictive Alignment
-                aligned_position = self.W_p(target_hidden_state)  # (B, H)
-                aligned_position = Activation('tanh')(aligned_position)  # (B, H)
-                aligned_position = self.v_p(aligned_position)  # (B, 1)
-                aligned_position = Activation('sigmoid')(aligned_position)  # (B, 1)
-                aligned_position = aligned_position * sequence_length  # (B, 1)
-                source_hidden_states = inputs  # (B, S, H)
+                aligned_position = self.W_p(
+                    target_hidden_state if self.context == 'many-to-one' else target_hidden_states  # <1>:(B, H), <M>:(B, S', H)
+                )
+                aligned_position = Activation('tanh')(aligned_position)                             # <1>:(B, H), <M>:(B, S', H)
+                aligned_position = self.v_p(aligned_position)                                       # <1>:(B, 1), <M>:(B, S', 1)
+                aligned_position = Activation('sigmoid')(aligned_position)                          # <1>:(B, 1), <M>:(B, S', 1)
+                aligned_position = aligned_position * sequence_length                               # <1>:(B, 1), <M>:(B, S', 1)
+
+                source_hidden_states = inputs                                                       # (B, S, H)
 
             elif self.alignment_type == 'local-p*':  # Completely Predictive Alignment
-                aligned_position = self.W_p(inputs)  # (B, S, H)
-                aligned_position = Activation('tanh')(aligned_position)  # (B, S, H)
-                aligned_position = self.v_p(aligned_position)  # (B, S, 1)
-                aligned_position = Activation('sigmoid')(aligned_position)  # (B, S, 1)
-                # Only keep top D values out of the sigmoid activation, and zero-out the rest ##
-                aligned_position = tf.squeeze(aligned_position, axis=-1)  # (B, S)
-                top_probabilities = tf.nn.top_k(input=aligned_position,
+                aligned_position = self.W_p(inputs)                                                 # (B, S, H)
+                aligned_position = Activation('tanh')(aligned_position)                             # (B, S, H)
+                aligned_position = self.v_p(aligned_position)                                       # (B, S, 1)
+                aligned_position = Activation('sigmoid')(aligned_position)                          # (B, S, 1)
+                # Only keep top D values out of the sigmoid activation, and zero-out the rest
+                aligned_position = tf.squeeze(aligned_position, axis=-1)                            # (B, S)
+                top_probabilities = tf.nn.top_k(input=aligned_position,                             # (values:(B, D), indices:(B, D))
                                                 k=self.window_width,
-                                                sorted=False)  # (values:(B, D), indices:(B, D))
+                                                sorted=False)
                 onehot_vector = tf.one_hot(indices=top_probabilities.indices,
-                                           depth=sequence_length)  # (B, D, S)
-                onehot_vector = tf.reduce_sum(onehot_vector, axis=1)  # (B, S)
-                aligned_position = Multiply()([aligned_position, onehot_vector])  # (B, S)
-                aligned_position = tf.expand_dims(aligned_position, axis=-1)  # (B, S, 1)
-                source_hidden_states = Multiply()([inputs, aligned_position])  # (B, S*=S(D), H)
+                                           depth=sequence_length)                                   # (B, D, S)
+                onehot_vector = tf.reduce_sum(onehot_vector, axis=1)                                # (B, S)
+                aligned_position = Multiply()([aligned_position, onehot_vector])                    # (B, S)
+                aligned_position = tf.expand_dims(aligned_position, axis=-1)                        # (B, S, 1)
+                source_hidden_states = Multiply()([inputs, aligned_position])                       # (B, S*=S(D), H)
                 # Scale back-to approximately original hidden state values
-                aligned_position += 1  # (B, S, 1)
-                source_hidden_states /= aligned_position  # (B, S*=S(D), H)
+                aligned_position += 1                                                               # (B, S, 1)
+                source_hidden_states /= aligned_position                                            # (B, S*=S(D), H)
 
         # Compute alignment score through specified function
         if 'dot' in self.score_function:
-            attention_score = Dot(axes=[2, 1])([source_hidden_states, target_hidden_state])  # (B, S*)
+            if self.context == 'many-to-one':
+                attention_score = Dot(axes=[2, 1])([source_hidden_states, target_hidden_state])     # (B, S*)
+            elif self.context == 'many-to-many':
+                attention_score = Dot(axes=[2, 2])([target_hidden_states, source_hidden_states])    # (B, S', S*)
             if self.score_function == 'scaled_dot':
-                attention_score = attention_score * (1 / np.sqrt(float(inputs.shape[2])))  # (B, S*)
+                attention_score = attention_score * (1 / np.sqrt(float(inputs.shape[2])))           # <1>:(B, S*), <M>:(B, S', S*)
 
         elif self.score_function == 'general':
-            weighted_hidden_states = self.W_a(source_hidden_states)  # (B, S*, H)
-            attention_score = Dot(axes=[2, 1])([weighted_hidden_states, target_hidden_state])  # (B, S*)
+            weighted_hidden_states = self.W_a(source_hidden_states)                                 # (B, S*, H)
+            if self.context == 'many-to-one':
+                attention_score = Dot(axes=[2, 1])([weighted_hidden_states, target_hidden_state])   # (B, S*)
+            elif self.context == 'many-to-many':
+                attention_score = Dot(axes=[2, 2])([target_hidden_states, weighted_hidden_states])  # (B, S', S*)
 
         elif self.score_function == 'location':
-            weighted_target_state = self.W_a(target_hidden_state)  # (B, H)
-            attention_score = Activation('softmax')(weighted_target_state)  # (B, H)
-            attention_score = RepeatVector(n=inputs.shape[1]-1 if self.seperate
-                                           else inputs.shape[1])(attention_score)  # (B, S*, H)
-            attention_score = tf.reduce_sum(attention_score, axis=-1)  # (B, S*)
+            weighted_target_state = self.W_a(                                                       # <1>:(B, H), <M>:(B, S', H)
+                target_hidden_state if self.context == 'many-to-one' else target_hidden_states
+            )
+            attention_score = Activation('softmax')(weighted_target_state)                          # <1>:(B, H), <M>:(B, S', H)
+            if self.context == 'many-to-many':
+                attention_score = Flatten()(attention_score)                                        # (B, S'*H)
+            attention_score = RepeatVector(inputs.shape[1])(attention_score)                        # <1>:(B, S*, H), <M>:(B, S*, S'*H)
+            if self.context == 'many-to-many':
+                attention_score = Reshape((inputs.shape[1],                                         # (B, S*, S', H)
+                                           target_hidden_states.shape[1],
+                                           inputs.shape[2]))(attention_score)
+                attention_score = tf.transpose(attention_score, perm=(0, 2, 1, 3))                  # (B, S', S*, H)
+            attention_score = tf.reduce_sum(attention_score, axis=-1)                               # <1>:(B, S*), <M>:(B, S', S*)
 
         elif self.score_function == 'concat':
-            weighted_hidden_states = self.W_a(source_hidden_states)  # (B, S*, H)
-            weighted_target_state = self.U_a(target_hidden_state_reshaped)  # (B, 1, H)
-            weighted_sum = weighted_hidden_states + weighted_target_state  # (B, S*, H)
-            weighted_sum = Activation('tanh')(weighted_sum)  # (B, S*, H)
-            attention_score = self.v_a(weighted_sum)  # (B, S*, 1)
-            attention_score = attention_score[:, :, 0]  # (B, S*)
+            weighted_hidden_states = self.W_a(source_hidden_states)                                 # (B, S*, H)
 
-        attention_weights = Activation('softmax')(attention_score)  # (B, S*)
+            if self.context == 'many-to-one':
+                weighted_target_state = self.U_a(target_hidden_state_reshaped)                      # (B, 1, H)
+                weighted_sum = weighted_hidden_states + weighted_target_state                       # (B, S*, H)
+                weighted_sum = Activation('tanh')(weighted_sum)                                     # (B, S*, H)
+                attention_score = self.v_a(weighted_sum)                                            # (B, S*, 1)
+                attention_score = attention_score[:, :, 0]                                          # (B, S*)
+
+            elif self.context == 'many-to-many':
+                weighted_target_states = self.U_a(target_hidden_states)                             # (B, S', H)
+                weighted_sum = Dot(axes=[2, 2])([weighted_target_states, weighted_hidden_states])   # (B, S', S*)
+                weighted_sum = Flatten()(weighted_sum)                                              # (B, S'*S*)
+                weighted_sum = RepeatVector(inputs.shape[2])(weighted_sum)                          # (B, H, S'*S*)
+                weighted_sum = Reshape((inputs.shape[2],                                            # (B, H, S', S*)
+                                        target_hidden_states.shape[1],
+                                        inputs.shape[1]))(weighted_sum)
+                weighted_sum = tf.transpose(weighted_sum, perm=(0, 2, 3, 1))                        # (B, S', S*, H)
+                weighted_sum = Activation('tanh')(weighted_sum)                                     # (B, S', S*, H)
+                attention_score = self.v_a(weighted_sum)                                            # (B, S', S*, 1)
+                attention_score = attention_score[:, :, :, 0]                                       # (B, S', S*)
+
+        attention_weights = Activation('softmax')(attention_score)                                  # <1>:(B, S*), <M>:(B, S', S*)
 
         if self.alignment_type == 'local-p':  # Gaussian Distribution
             gaussian_estimation = lambda s: tf.exp(-tf.square(s - aligned_position) /
                                                    (2 * tf.square(self.window_width / 2)))
             gaussian_factor = gaussian_estimation(0)
             for i in range(1, sequence_length):
-                gaussian_factor = Concatenate()([gaussian_factor, gaussian_estimation(i)])
-            # gaussian_factor: (B, S*)
-            attention_weights = attention_weights * gaussian_factor  # (B, S*)
-
-        context_vector = Dot(axes=[1, 1])([source_hidden_states, attention_weights])  # (B, H)
-        attention_vector = None
+                gaussian_factor = Concatenate()([gaussian_factor, gaussian_estimation(i)])          # <1>:(B, S*), <M>:(B, S', S*)
+            attention_weights = attention_weights * gaussian_factor                                 # <1>:(B, S*), <M>:(B, S', S*)
 
         if self.context == 'many-to-one':
-            combined_information = Concatenate()([context_vector, target_hidden_state])  # (B, 2*H)
-            attention_vector = self.attention_vector(combined_information)  # (B, self.size)
+            context_vector = Dot(axes=[1, 1])([source_hidden_states, attention_weights])            # (B, H)
+            combined_information = Concatenate()([context_vector, target_hidden_state])             # (B, 2*H)
 
         elif self.context == 'many-to-many':
-            attention_vector = self.attention_vector(context_vector)  # (B, self.size)
+            context_vector = Dot(axes=[2, 1])([attention_weights, source_hidden_states])            # (B, S', H)
+            combined_information = Concatenate()([context_vector, target_hidden_states])            # (B, S', 2*H)
+
+        attention_vector = self.attention_vector(combined_information)                              # <1>:(B, self.size), <M>:(B, S', self.size)
 
         return attention_vector
 
