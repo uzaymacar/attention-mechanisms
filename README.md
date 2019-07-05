@@ -38,16 +38,14 @@ First introduced in *Neural Machine Translation by Jointly Learning to Align and
 </p>
 
 ### Local (Hard) Attention
-First introduced in *Show, Attend and Tell: Neural Image Caption Generation with Visual Attention* by Kelvin Xu et al. and adapted to NLP in *Effective Approaches to Attention-based Neural Machine Translation* by Minh-Thang Luong et al. The idea is to  eliminate the attentive cost of global attention by instead focusing on a small subset of tokens in hidden states set derived from the input sequence. This window is proposed as ```[p_t-D, p_t+D]``` where ```D=width```, and we disregard positions that cross sequence boundaries. The aligned position, ```p_t```, is decided either through **a) monotonic alignment:** set ```p_t=t```, or **b) predictive alignment**: set ```p_t = S*sigmoid(FC1(tanh(FC2(h_t)))``` where fully-connected layers are trainable weight matrices. Since yielding an integer index value is undifferentiable due to ```tf.cast()``` and similar methods, this implementation instead derives a aligned position float value and uses Gaussian distribution to
-adjust the attention weights of all source hidden states instead of slicing the actual
-window. We also propose an experimental alignment type, **c) completely predictive
-alignment:** set ```p_t``` as in ii), but apply it to all source hidden states (```h_s```) instead
-of the target hidden state (```h_t```). Then, choose top ```@window_width``` positions to build
-the context vector and zero out the rest.
+First introduced in *Show, Attend and Tell: Neural Image Caption Generation with Visual Attention* by Kelvin Xu et al. and adapted to NLP in *Effective Approaches to Attention-based Neural Machine Translation* by Minh-Thang Luong et al. The idea is to  eliminate the attentive cost of global attention by instead focusing on a small subset of tokens in hidden states set derived from the input sequence. This window is proposed as ```[p_t-D, p_t+D]``` where ```D=width```, and we disregard positions that cross sequence boundaries. The aligned position, ```p_t```, is decided either through **a) monotonic alignment:** set ```p_t=t```, or **b) predictive alignment**: set ```p_t = S*sigmoid(FC1(tanh(FC2(h_t)))``` where fully-connected layers are trainable weight matrices. Since yielding an integer index value is undifferentiable due to ```tf.cast()``` and similar methods, this implementation instead derives a aligned position float value and uses Gaussian distribution to adjust the attention weights of all source hidden states instead of slicing the actual window. We also propose an experimental alignment type, **c) completely predictive alignment:** set ```p_t``` as in ii), but apply it to all source hidden states (```h_s```) instead of the target hidden state (```h_t```). Then, choose top ```@window_width``` positions to build the context vector and zero out the rest. Currently, this option is only avaiable for many-to-one scenarios.
 
 <p align="center">
 <img src="assets/local_attention.png">
 </p>
+
+### Hierarchical Attention
+First introduced in *Hierarchical Attention Networks for Document Classification* by Zichao Yang et al.  The idea is to reflect the hierarchical structure that exists within documents. The original paper proposes a **bottom-up** approach by applying attention mechanisms sequentially at word- and sentence-levels, but a **top-down** approach (ex. word- and character-levels) is also applicable. Hence, this type of mechanisms is said to attend differentially to more and less important content when constructing the document representation.
 
 ## Alignment Functions
 <p align="center">
@@ -118,15 +116,14 @@ You can find a text generation (many-to-one) example on [Shakespeare Dataset](ht
 | BiLSTM Model w/ Local-p* Attention |
 
 ### Machine Translation
-You can find a machine translation (many-to-many) example on [English-to-Spanish Dataset](http://www.manythings.org/anki/) inside ```examples/machine_translation.py```. This example pretty much follows [TensorFlow's Machine Translation Example](https://www.tensorflow.org/beta/tutorials/text/nmt_with_attention) with some adaptions. It compares five distinct ```tf.keras.Model()```(*Functional API*) modelS (all word-level) and aims to measure the effectiveness of the implemented attention layer. Refer to the below table for metrics:
+You can find a machine translation (many-to-many) example on [English-to-Spanish Dataset](http://www.manythings.org/anki/) inside ```examples/machine_translation.py```. This example pretty much follows [TensorFlow's Machine Translation Example](https://www.tensorflow.org/beta/tutorials/text/nmt_with_attention) with some adaptions. It compares four distinct ```tf.keras.Model()```(*Functional API*) modelS (all word-level) and aims to measure the effectiveness of the implemented attention layer. Refer to the below table for metrics:
 
-| Model ID | Minimum Validation Perplexity | Maximum Validation Categorical Accuracy |
-| -------- | ----------------------------- | --------------------------------------- |
-| Encoder-Decoder Model | | | 
-| Encoder-Decoder Model w/ Global Attention | | | 
-| Encoder-Decoder Model w/ Local-m Attention | | | 
-| Encoder-Decoder Model w/ Local-p Attention | | | 
-| Encoder-Decoder Model w/ Local-p* Attention | | | 
+| Model ID | Maximum Validation Categorical Accuracy |
+| -------- | --------------------------------------- |
+| Encoder-Decoder Model | 0.8299 | 
+| Encoder-Decoder Model w/ Global Attention | 0.8344 | 
+| Encoder-Decoder Model w/ Local-m Attention | | 
+| Encoder-Decoder Model w/ Local-p Attention | | 
 
 ## Contributing
 Whether it is bugs you have encountered, performance concerns, or any kind of input you have in mind, this is the perfect time to share them! Check ```CONTRIBUTING.md``` for more information and guidelines on this topic.
