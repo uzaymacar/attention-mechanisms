@@ -56,9 +56,6 @@ class Attention(Layer):
     to keep in mind is that ALL decoder hidden states are collected and aligned with encoder
     hidden states at once for simplification purposes. This shouldn't have an effect on performance.
 
-    @param (int) size: size of attention vector or attention length; number of hidden units to
-           decode the attention to with dense layer, presumably before being fed to the final
-           softmax dense layer for next token prediction
     @param (str) context: the context of the problem at hand, specify 'many-to-many' for
            sequence-to-sequence tasks such as machine translation and question answering, or
            specify 'many-to-one' for tasks such as sentiment classification and language modelling
@@ -85,7 +82,6 @@ class Attention(Layer):
         if score_function not in ['dot', 'general', 'location', 'concat', 'scaled_dot']:
             raise ValueError("Argument for param @score_function is not recognized")
         super(Attention, self).__init__(**kwargs)
-        self.size = size
         self.context = context
         self.alignment_type = alignment_type
         self.window_width = window_width  # D
@@ -93,7 +89,6 @@ class Attention(Layer):
 
     def get_config(self):
         base_config = super(Attention, self).get_config()
-        base_config['size'] = self.size
         base_config['alignment_type'] = self.alignment_type
         base_config['window_width'] = self.window_width
         base_config['score_function'] = self.score_function
@@ -179,7 +174,7 @@ class Attention(Layer):
                             if aligned_position + self.window_width <= self.input_sequence_length
                             else self.input_sequence_length)
                 # Extract window window
-                source_hidden_states = Lambda(lambda x: x[:, left: right, :])(source_hidden_states)  # (B, S*=(D, 2xD), H)
+                source_hidden_states = Lambda(lambda x: x[:, left:right, :])(source_hidden_states)  # (B, S*=(D, 2xD), H)
 
             elif self.alignment_type == 'local-p':                                                  # Predictive Alignment
                 aligned_position = self.W_p(target_hidden_state)                                    # (B, 1, H)

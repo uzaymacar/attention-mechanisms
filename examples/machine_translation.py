@@ -160,14 +160,15 @@ training_cutoff, test_cutoff = len(X_train) % batch_size, len(X_test) % batch_si
 X_train, Y_train = X_train[:-training_cutoff], Y_train[:-training_cutoff]
 X_test, Y_test = X_test[:-test_cutoff], Y_test[:-test_cutoff]
 
-# Get decoder inputs, one word padded versions of labels (Y)
+# Feed in current labels (Y) as decoder inputs, and pad current labels by 1 word
 # Check https://www.tensorflow.org/images/seq2seq/attention_mechanism.jpg for better understanding
-X_train_target = np.array(pad_sequences(sequences=np.array([sequence[1:] for sequence in Y_train]),
-                                        maxlen=target_sequence_length,
-                                        padding='post'))
-X_test_target = np.array(pad_sequences(sequences=np.array([sequence[1:] for sequence in Y_test]),
-                                       maxlen=target_sequence_length,
-                                       padding='post'))
+X_train_target, X_test_target = Y_train, Y_test
+Y_train = np.array(pad_sequences(sequences=np.array([sequence[1:] for sequence in Y_train]),
+                                 maxlen=target_sequence_length,
+                                 padding='post'))
+Y_test = np.array(pad_sequences(sequences=np.array([sequence[1:] for sequence in Y_test]),
+                                maxlen=target_sequence_length,
+                                padding='post'))
 
 # Create word-level multi-class classification (machine translation), sequence-to-sequence model
 # Input Layers
