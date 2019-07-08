@@ -116,7 +116,7 @@ This example compares 7 model (all character-level) types and aims to measure th
 | -------- | ----------------------------- | --------------------------------------- |
 | BiLSTM Model | 6.0089 | 0.5959 | 
 | BiLSTM Model w/ Self-Attention (Non-Penalized) | 6.3194 | 0.6016 |
-| BiLSTM Model w/ Global Attention |
+| BiLSTM Model w/ Global Attention | 6.4811 |
 | BiLSTM Model w/ Local-m Attention |
 | BiLSTM Model w/ Local-p Attention |
 | BiLSTM Model w/ Local-p* Attention |
