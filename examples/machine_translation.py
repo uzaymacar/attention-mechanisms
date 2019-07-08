@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import time
 import os
 import unicodedata
 import re
@@ -26,9 +27,11 @@ import tensorflow as tf
 from tensorflow.keras.utils import get_file, to_categorical
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras import Sequential
+from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, Embedding, Bidirectional, Dense, RepeatVector, \
-    TimeDistributed
+    TimeDistributed, Flatten, Lambda, Concatenate, Permute
+from tensorflow.keras.losses import SparseCategoricalCrossentropy
+from tensorflow.keras.optimizers import Adam
 from tensorflow.compat.v1.keras.layers import CuDNNLSTM   # CuDNNLSTM not yet released for TF 2.0
 
 import sys
@@ -41,11 +44,11 @@ parser.add_argument("--config",
                     default=0,
                     help="Integer value representing a model configuration")
 # CONFIG OPTIONS:
-# 0: BiLSTM Model
-# 1: BiLSTM Model w/ Global Attention
-# 2: BiLSTM Model w/ Local-m Attention
-# 3: BiLSTM Model w/ Local-p Attention
-# 4: BiLSTM Model w/ Local-p* Attention
+# 0: Encoder-Decoder Model
+# 1: Encoder-Decoder Model w/ Global Attention
+# 2: Encoder-Decoder Model w/ Local-m Attention
+# 3: Encoder-Decoder Model w/ Local-p Attention
+# 4: Encoder-Decoder Model w/ Local-p* Attention
 args = parser.parse_args()
 
 # Set seeds for reproducibility
@@ -53,7 +56,7 @@ np.random.seed(500)
 tf.random.set_seed(500)
 
 # Set global constants
-embedding_dims = 256    # number of dimensions to represent each character in vector space
+embedding_dim = 128     # number of dimensions to represent each character in vector space
 batch_size = 100        # feed in the neural network in 100-example training batches
 num_epochs = 10         # number of times the neural network goes over EACH training example
 config = int(args.config)  # model-configuration
@@ -147,46 +150,106 @@ target_vocabulary_size = len(target_language_tokenizer.word_index) + 1
 input_sequence_length, target_sequence_length = max_length(input_tensor), max_length(target_tensor)
 
 # Split data to training and validation sets
-X_train, X_test, Y_train, Y_test = train_test_split(
-    input_tensor, target_tensor, test_size=0.2, random_state=500
-)
+X_train, X_test, Y_train, Y_test = train_test_split(input_tensor,
+                                                    target_tensor,
+                                                    test_size=0.2,
+                                                    random_state=500)
 
 # Compute batch size and cutoff training & validation examples to fit
 training_cutoff, test_cutoff = len(X_train) % batch_size, len(X_test) % batch_size
 X_train, Y_train = X_train[:-training_cutoff], Y_train[:-training_cutoff]
 X_test, Y_test = X_test[:-test_cutoff], Y_test[:-test_cutoff]
 
-# Create word-level machine translation model -> Encoder Model + Decoder Model
-model = Sequential()
-# Input Layer
-model.add(Input(shape=(input_sequence_length,), batch_size=batch_size))
-# i) Encoder Model
-# Word-Embedding Layer
-model.add(Embedding(input_dim=input_vocabulary_size, output_dim=embedding_dims))
-# Recurrent Layer
-model.add(Bidirectional(CuDNNLSTM(units=512, return_sequences=True if config != 0 else False)))
-# Optional Attention Mechanisms
+# Get decoder inputs, one word padded versions of labels (Y)
+# Check https://www.tensorflow.org/images/seq2seq/attention_mechanism.jpg for better understanding
+X_train_target = np.array(pad_sequences(sequences=np.array([sequence[1:] for sequence in Y_train]),
+                                        maxlen=target_sequence_length,
+                                        padding='post'))
+X_test_target = np.array(pad_sequences(sequences=np.array([sequence[1:] for sequence in Y_test]),
+                                       maxlen=target_sequence_length,
+                                       padding='post'))
+
+# Create word-level multi-class classification (machine translation), sequence-to-sequence model
+# Input Layers
+# i)  Initialize input & target sequences
+X_input = Input(shape=(input_sequence_length,), batch_size=batch_size, name='input_sequences')
+X_target = Input(shape=(target_sequence_length,), batch_size=batch_size, name='target_sequences')
+# ii) Initialize hidden & cell states
+initial_hidden_state = Input(shape=(128,), batch_size=batch_size, name='hidden_state')
+initial_cell_state = Input(shape=(128,), batch_size=batch_size, name='cell_state')
+hidden_state, cell_state = initial_hidden_state, initial_cell_state
+# NOTE: Here hidden state refers to the recurrently propagated input to the cell, whereas cell
+# state refer to the cell state directly from the previous cell.
+
+# Word-Embedding Layers
+# i)  Embed input sequences from the input language
+embedded_input = Embedding(input_dim=input_vocabulary_size, output_dim=embedding_dim)(X_input)
+# ii) Embed target sequences from the target language
+embedded_target = Embedding(input_dim=target_vocabulary_size, output_dim=embedding_dim)(X_target)
+# NOTE: The embedded target sequences (deriving from X_target) allow us to enforce Teacher Forcing:
+# using the actual output (correct translation) from the training dataset at the current time step
+# as input in the next time step, rather than the output generated by the network.
+
+# Recurrent Layers
+# i)  Encoder
+encoder_output = CuDNNLSTM(units=128, return_sequences=True)(embedded_input)
+# ii) Decoder
+decoder_recurrent_layer = CuDNNLSTM(units=128, return_state=True)
+# NOTE: The encoder is always fully vectorized and returns the hidden representations of the whole
+# sequence at once, whereas the decoder does this step by step.
+
+# Optional Attention Mechanism
 if config == 1:
-    model.add(Attention(size=1024, context='many-to-many', alignment_type='global'))
+    attention_layer = Attention(size=1024, context='many-to-many', alignment_type='global')
 elif config == 2:
-    model.add(Attention(size=1024, context='many-to-many', alignment_type='local-m'))
+    attention_layer = Attention(size=1024, context='many-to-many', alignment_type='local-m')
 elif config == 3:
-    model.add(Attention(size=1024, context='many-to-many', alignment_type='local-p'))
+    attention_layer = Attention(size=1024, context='many-to-many', alignment_type='local-p')
 elif config == 4:
-    model.add(Attention(size=1024, context='many-to-many', alignment_type='local-p*'))
-# Connection between Encoder & Decoder (input_sequence_length -> target_sequence_length)
-model.add(RepeatVector(target_sequence_length))
-# ii) Decoder Model
-# Recurrent Layer
-model.add(Bidirectional(CuDNNLSTM(units=512, return_sequences=True)))
+    attention_layer = Attention(size=1024, context='many-to-many', alignment_type='local-p*')
+
 # Prediction Layer
-model.add(TimeDistributed(Dense(units=target_vocabulary_size, activation='softmax')))
+decoder_dense_layer = Dense(units=target_vocabulary_size, activation='softmax')
+
+# Training Loop
+outputs = []
+for timestep in range(target_sequence_length):
+    # Get current input in from embedded target sequences
+    current_word = Lambda(lambda x: x[:, timestep: timestep+1, :])(embedded_target)
+    # Apply optional attention mechanism
+    if config != 0:
+        context_vector, attention_weights = attention_layer([encoder_output, hidden_state, timestep])
+    # Combine information
+    decoder_input = Concatenate(axis=1)(
+        [context_vector if config != 0 else encoder_output, current_word]
+    )
+    # Decode target word hidden representation at t = timestep
+    output, hidden_state, cell_state = decoder_recurrent_layer(
+        decoder_input, initial_state=[hidden_state, cell_state]
+    )
+    # Predict next word & append to outputs
+    decoder_outputs = decoder_dense_layer(output)
+    outputs.append(decoder_outputs)
+
+# Reshape outputs to (B, S', V)
+outputs = Lambda(lambda x: tf.keras.backend.permute_dimensions(tf.stack(x), pattern=(1, 0, 2)))(outputs)
 
 # Compile model
+model = Model(inputs=[X_input, X_target, initial_hidden_state, initial_cell_state],
+              outputs=outputs)
 model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-print(model.summary())
+# print(model.summary())
+# NOTE: Summary is omitted due to length, deriving from number of simulated recurrent connections
+
+# Create placeholder variables of 0s
+placeholder = tf.zeros(shape=(len(X_train), 128))
 
 # Train multi-step, multi-class classification model
-model.fit(x=X_train, y=Y_train,
-          validation_data=(X_test, Y_test),
+model.fit(x={'input_sequences': X_train, 'target_sequences': X_train_target,
+             'hidden_state': placeholder, 'cell_state': placeholder},
+          y=Y_train,
+          validation_data=([X_test, X_test_target,
+                            placeholder, placeholder],
+                           Y_test),
           epochs=num_epochs, batch_size=batch_size)
+
