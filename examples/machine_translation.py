@@ -58,7 +58,7 @@ tf.random.set_seed(500)
 # Set global constants
 embedding_dim = 128     # number of dimensions to represent each character in vector space
 batch_size = 100        # feed in the neural network in 100-example training batches
-num_epochs = 10         # number of times the neural network goes over EACH training example
+num_epochs = 20         # number of times the neural network goes over EACH training example
 config = int(args.config)  # model-configuration
 
 # Load Spanish-to-English dataset (.zip)
@@ -252,4 +252,3 @@ model.fit(x={'input_sequences': X_train, 'target_sequences': X_train_target,
                             placeholder, placeholder],
                            Y_test),
           epochs=num_epochs, batch_size=batch_size)
-
