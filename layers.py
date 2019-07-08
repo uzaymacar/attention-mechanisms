@@ -68,9 +68,11 @@ class Attention(Layer):
     @param (str) score_function: alignment score function config; current implementations include
            the 'dot', 'general', and 'location' both by Luong et al. (2015), 'concat' by Bahdanau et
            al. (2015), and 'scaled_dot' by Vaswani et al. (2017)
+    @param (str) model_api: specify to use TF's Sequential OR Functional API, note that attention
+           weights are not outputted with the former as it only accepts single-output layers
     """
-    def __init__(self, size, context='many-to-many', alignment_type='global',
-                 window_width=None, score_function='general', **kwargs):
+    def __init__(self, context='many-to-many', alignment_type='global', window_width=None,
+                 score_function='general', model_api='functional', **kwargs):
         if context not in ['many-to-many', 'many-to-one']:
             raise ValueError("Argument for param @context is not recognized")
         if alignment_type not in ['global', 'local-m', 'local-p', 'local-p*']:
@@ -81,17 +83,21 @@ class Attention(Layer):
             raise ValueError("Can't use local-p* approach in many-to-many scenarios")
         if score_function not in ['dot', 'general', 'location', 'concat', 'scaled_dot']:
             raise ValueError("Argument for param @score_function is not recognized")
+        if model_api not in ['sequential', 'functional']:
+            raise ValueError("Argument for param @model_api is not recognized")
         super(Attention, self).__init__(**kwargs)
         self.context = context
         self.alignment_type = alignment_type
         self.window_width = window_width  # D
         self.score_function = score_function
+        self.model_api = model_api
 
     def get_config(self):
         base_config = super(Attention, self).get_config()
         base_config['alignment_type'] = self.alignment_type
         base_config['window_width'] = self.window_width
         base_config['score_function'] = self.score_function
+        base_config['model_api'] = self.model_api
         return base_config
 
     def build(self, input_shape):
@@ -243,7 +249,10 @@ class Attention(Layer):
         # Derive context vector
         context_vector = source_hidden_states * attention_weights                                   # (B, S*, H)
 
-        return context_vector, attention_weights
+        if self.model_api == 'functional':
+            return context_vector, attention_weights
+        elif self.model_api == 'sequential':
+            return context_vector
 
 
 class SelfAttention(Layer):
@@ -258,13 +267,20 @@ class SelfAttention(Layer):
            extracted from each sentence.
     @param (bool) use_penalization: set True to use penalization, otherwise set False
     @param (int) penalty_coefficient: the weight of the extra loss
+    @param (str) model_api: specify to use TF's Sequential OR Functional API, note that attention
+           weights are not outputted with the former as it only accepts single-output layers
     """
-    def __init__(self, size, num_hops=8, use_penalization=True, penalty_coefficient=0.1, **kwargs):
+    def __init__(self, size, num_hops=8, use_penalization=True,
+                 penalty_coefficient=0.1, model_api='functional', **kwargs):
+        if model_api not in ['sequential', 'functional']:
+            raise ValueError("Argument for param @model_api is not recognized")
         self.size = size
         self.num_hops = num_hops
         self.use_penalization = use_penalization
         self.penalty_coefficient = penalty_coefficient
+        self.model_api = model_api
         super(SelfAttention, self).__init__(**kwargs)
+
 
     def get_config(self):
         base_config = super(SelfAttention, self).get_config()
@@ -272,6 +288,7 @@ class SelfAttention(Layer):
         base_config['num_hops'] = self.num_hops
         base_config['use_penalization'] = self.use_penalization
         base_config['penalty_coefficient'] = self.penalty_coefficient
+        base_config['model_api'] = self.model_api
         return base_config
 
     def build(self, input_shape):
@@ -303,4 +320,7 @@ class SelfAttention(Layer):
             frobenius_norm = tf.sqrt(tf.reduce_sum(tf.square(product - identity)))  # distance
             self.add_loss(self.penalty_coefficient * frobenius_norm)  # loss
 
-        return embedding_matrix_flattened
+        if self.model_api == 'functional':
+            return embedding_matrix_flattened, attention_weights
+        elif self.model_api == 'sequential':
+            return embedding_matrix_flattened

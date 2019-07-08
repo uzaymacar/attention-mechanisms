@@ -201,13 +201,13 @@ decoder_recurrent_layer = CuDNNLSTM(units=128, return_state=True)
 
 # Optional Attention Mechanism
 if config == 1:
-    attention_layer = Attention(size=1024, context='many-to-many', alignment_type='global')
+    attention_layer = Attention(context='many-to-many', alignment_type='global')
 elif config == 2:
-    attention_layer = Attention(size=1024, context='many-to-many', alignment_type='local-m')
+    attention_layer = Attention(context='many-to-many', alignment_type='local-m')
 elif config == 3:
-    attention_layer = Attention(size=1024, context='many-to-many', alignment_type='local-p')
+    attention_layer = Attention(context='many-to-many', alignment_type='local-p')
 elif config == 4:
-    attention_layer = Attention(size=1024, context='many-to-many', alignment_type='local-p*')
+    attention_layer = Attention(context='many-to-many', alignment_type='local-p*')
 
 # Prediction Layer
 decoder_dense_layer = Dense(units=target_vocabulary_size, activation='softmax')
