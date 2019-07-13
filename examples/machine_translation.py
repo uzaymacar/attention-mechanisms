@@ -29,10 +29,9 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, Embedding, Bidirectional, Dense, RepeatVector, \
-    TimeDistributed, Flatten, Lambda, Concatenate, Permute
-from tensorflow.keras.losses import SparseCategoricalCrossentropy
-from tensorflow.keras.optimizers import Adam
+    TimeDistributed, Flatten, Lambda, Concatenate, Permute, Reshape
 from tensorflow.compat.v1.keras.layers import CuDNNLSTM   # CuDNNLSTM not yet released for TF 2.0
+from tensorflow.keras.backend import permute_dimensions
 
 import sys
 sys.path.append('..')  # add parent directory to Python path for layers.py access
@@ -48,7 +47,6 @@ parser.add_argument("--config",
 # 1: Encoder-Decoder Model w/ Global Attention
 # 2: Encoder-Decoder Model w/ Local-m Attention
 # 3: Encoder-Decoder Model w/ Local-p Attention
-# 4: Encoder-Decoder Model w/ Local-p* Attention
 args = parser.parse_args()
 
 # Set seeds for reproducibility
@@ -58,7 +56,7 @@ tf.random.set_seed(500)
 # Set global constants
 embedding_dim = 128     # number of dimensions to represent each character in vector space
 batch_size = 100        # feed in the neural network in 100-example training batches
-num_epochs = 20         # number of times the neural network goes over EACH training example
+num_epochs = 30         # number of times the neural network goes over EACH training example
 config = int(args.config)  # model-configuration
 
 # Load Spanish-to-English dataset (.zip)
@@ -206,8 +204,6 @@ elif config == 2:
     attention_layer = Attention(context='many-to-many', alignment_type='local-m')
 elif config == 3:
     attention_layer = Attention(context='many-to-many', alignment_type='local-p')
-elif config == 4:
-    attention_layer = Attention(context='many-to-many', alignment_type='local-p*')
 
 # Prediction Layer
 decoder_dense_layer = Dense(units=target_vocabulary_size, activation='softmax')
@@ -219,11 +215,12 @@ for timestep in range(target_sequence_length):
     current_word = Lambda(lambda x: x[:, timestep: timestep+1, :])(embedded_target)
     # Apply optional attention mechanism
     if config != 0:
-        context_vector, attention_weights = attention_layer([encoder_output, hidden_state, timestep])
+        context_vector, attention_weights = attention_layer([encoder_output,
+                                                             hidden_state,
+                                                             timestep])
     # Combine information
-    decoder_input = Concatenate(axis=1)(
-        [context_vector if config != 0 else encoder_output, current_word]
-    )
+    decoder_input = Concatenate(axis=1)([context_vector if config != 0
+                                         else encoder_output, current_word])
     # Decode target word hidden representation at t = timestep
     output, hidden_state, cell_state = decoder_recurrent_layer(
         decoder_input, initial_state=[hidden_state, cell_state]
@@ -233,7 +230,7 @@ for timestep in range(target_sequence_length):
     outputs.append(decoder_outputs)
 
 # Reshape outputs to (B, S', V)
-outputs = Lambda(lambda x: tf.keras.backend.permute_dimensions(tf.stack(x), pattern=(1, 0, 2)))(outputs)
+outputs = Lambda(lambda x: permute_dimensions(tf.stack(x), pattern=(1, 0, 2)))(outputs)
 
 # Compile model
 model = Model(inputs=[X_input, X_target, initial_hidden_state, initial_cell_state],
