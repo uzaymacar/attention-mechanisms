@@ -19,7 +19,7 @@ import argparse
 import tensorflow as tf
 from tensorflow.keras.datasets import imdb
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras import Sequential
+from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, Embedding, Flatten, Dense
 
 import sys
@@ -49,30 +49,39 @@ num_epochs = 10          # number of times the neural network goes over EACH tra
 config = int(args.config)  # model configuration
 
 # Load the IMDB dataset for sentiment classification
-(X_train, Y_train), (X_test, Y_test) = imdb.load_data(num_words=10000)
+(X_train, Y_train), (X_test, Y_test) = imdb.load_data(num_words=vocabulary_size)
 
 # Pad & truncate sequences to fixed sequence length
 X_train = pad_sequences(sequences=X_train, maxlen=sequence_length)
 X_test = pad_sequences(sequences=X_test, maxlen=sequence_length)
 
 # Create word-level binary sentiment classification model
-model = Sequential()
 # Input Layer
-model.add(Input(shape=(sequence_length,), batch_size=batch_size))
+X = Input(shape=(sequence_length,), batch_size=batch_size)
+
 # Word-Embedding Layer
-model.add(Embedding(input_dim=vocabulary_size, output_dim=embedding_dims))
+embedded = Embedding(input_dim=vocabulary_size, output_dim=embedding_dims)(X)
+
 # Optional Self-Attention Mechanisms
 if config == 1:
-    model.add(SelfAttention(size=500, num_hops=8, use_penalization=False))
+    embedded, attention_weights = SelfAttention(size=50,
+                                                num_hops=6,
+                                                use_penalization=False)(embedded)
 elif config == 2:
-    model.add(SelfAttention(size=500, num_hops=8, use_penalization=True, penalty_coefficient=0.1))
+    embedded, attention_weights = SelfAttention(size=50,
+                                                num_hops=6,
+                                                use_penalization=True,
+                                                penalty_coefficient=0.1)(embedded)
+
 # Multi-Layer Perceptron
-model.add(Flatten())
-model.add(Dense(units=250, activation='relu'))
+embedded_flattened = Flatten()(embedded)
+fully_connected = Dense(units=250, activation='relu')(embedded_flattened)
+
 # Prediction Layer
-model.add(Dense(units=1, activation='sigmoid'))
+Y = Dense(units=1, activation='sigmoid')(fully_connected)
 
 # Compile model
+model = Model(inputs=X, outputs=Y)
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 print(model.summary())
 
