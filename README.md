@@ -66,7 +66,7 @@ where ```H``` is the number of hidden states given by the encoder RNN, and where
 
 ## Implementation Details
 * As of now, all attention mechanisms in this repository are successfully tested with applications in both many-to-one and many-to-many sequence tasks. Check the *Examples* subsection for example applications.
-* It should be noted that there is no claim that the attention mechanisms represented in this repository is optimized in anyway; there is still a lot of room for improvement from both a software development and research perspective.
+* It should be noted that there is no claim that the attention mechanisms represented in this repository (and their accompanying hyperparameters represented in *Examples* subsection) is optimized in anyway; there is still a lot of room for improvement from both a software development and research perspective.
 * Every layer is a subclass of ```tf.keras.layers.Layer()```.
 * The ```__init__()``` method of each custom class calls the the initialization method of its parent and defines additional attributes specific to each layer.
 * The ```get_config()``` method calls the configuration method of its parent and defines custom attributes introduced with the layer.
@@ -86,44 +86,51 @@ embedding = Embedding(input_dim=vocabulary_size, output_dim=embedded_dimensions)
 ## Encoding Recurrent Layers ##
 encoder = LSTM(units=recurrent_units, return_sequences=True)(embedding) # keep timesteps
 ## Decoding with Attention ##
-decoder = Attention(size=attention_size, alignment_type=attention_type)(encoder)
+decoder, attention_weights = Attention(context='many-to-one', alignment_type=attention_type, model_api='functional')(encoder)
 ## Prediction Layer ##
 Y = Dense(units=vocabulary_size, activation='softmax')(decoder)
 ```
 where ```alignment_type``` is one of ```'global'```, ```'local-m'```, ```'local-p'```, and ```'local-p*'```. For self attention, call the ```SelfAttention(size=attention_size)``` layer instead. 
 
-Check below subtopics for more examples, analyses, and comparisons.
+Check below subtopics for more examples, analyses, and comparisons. For fair comparison, all compared models utilize similar parameters. For example, a batch size of *100* and a number of epochs of *20* were preferred on some examples.
 
 ### Sentiment Classification
-You can find a sentiment classification (many-to-one) example on [IMBD Reviews Dataset](https://www.tensorflow.org/api_docs/python/tf/keras/datasets/imdb) inside ```examples/sentiment_classification.py```. This example compares three distinct ```tf.keras.Sequential()```(*Sequential API*) models (all word-level) and aims to measure the effectiveness of the implemented self-attention layer. Refer to the below table for metrics:
+You can find a sentiment classification (many-to-one, binary) example on [IMBD Reviews Dataset](https://www.tensorflow.org/api_docs/python/tf/keras/datasets/imdb) inside ```examples/sentiment_classification.py```. This example compares three distinct ```tf.keras.Model()```(*Functional API*) models (all word-level) and aims to measure the effectiveness of the implemented self-attention layer over the conventional MLP (Multi Layer Perceptron) model. Refer to the below table for metrics:
 
 | Model ID | Maximum Validation Binary Accuracy |
 | -------- | ---------------------------------- |
 | Simple Multi-Layer Perceptron Model | 0.8730 |
-| Simple Multi-Layer Perceptron Model w/ Self-Attention (Non-Penalized) | **0.8886** |
-| Simple Multi-Layer Perceptron Model w/ Self-Attention (Penalized) | 0.8822 |
+| Simple Multi-Layer Perceptron Model w/ Self-Attention (Non-Penalized) | **0.8907** |
+| Simple Multi-Layer Perceptron Model w/ Self-Attention (Penalized) | 0.8870 |
 
 ### Text Generation
-You can find a text generation (many-to-one) example on [Shakespeare Dataset](https://www.tensorflow.org/beta/tutorials/text/text_generation) inside ```examples/text_generation.py```. This example compares seven distinct ```tf.keras.Sequential()```(*Sequential API*) models (all character-level) and aims to measure the effectiveness of the implemented attention and self-attention layers. Refer to the below table for metrics:
-
-| Model ID | Minimum Validation Perplexity | Maximum Validation Categorical Accuracy |
-| -------- | ----------------------------- | --------------------------------------- |
-| BiLSTM Model | 6.0089 | 0.5959 | 
-| BiLSTM Model w/ Self-Attention (Non-Penalized) | 6.3194 | 0.6016 |
-| BiLSTM Model w/ Global Attention | 6.4811 |
-| BiLSTM Model w/ Local-m Attention |
-| BiLSTM Model w/ Local-p Attention |
-| BiLSTM Model w/ Local-p* Attention |
-
-### Machine Translation
-You can find a machine translation (many-to-many) example on [English-to-Spanish Dataset](http://www.manythings.org/anki/) inside ```examples/machine_translation.py```. This example pretty much follows [TensorFlow's Machine Translation Example](https://www.tensorflow.org/beta/tutorials/text/nmt_with_attention) with some adaptions. It compares four distinct ```tf.keras.Model()```(*Functional API*) modelS (all word-level) and aims to measure the effectiveness of the implemented attention layer. Refer to the below table for metrics:
+You can find a text generation (many-to-one) example on [Shakespeare Dataset](https://www.tensorflow.org/beta/tutorials/text/text_generation) inside ```examples/text_generation.py```. This example compares three distinct ```tf.keras.Model()```(*Functional API*) models (all character-level) and aims to measure the effectiveness of the implemented attention and self-attention layers over the conventional LSTM (Long Short Term Memory) models. Refer to the below table for metrics:
 
 | Model ID | Maximum Validation Categorical Accuracy |
 | -------- | --------------------------------------- |
-| Encoder-Decoder Model | 0.8299 | 
-| Encoder-Decoder Model w/ Global Attention | 0.8344 | 
-| Encoder-Decoder Model w/ Local-m Attention | | 
-| Encoder-Decoder Model w/ Local-p Attention | | 
+| LSTM Model | 0.5953 | 
+| LSTM Model w/ Self-Attention (Non-Penalized) | 0.6049 |
+| LSTM Model w/ Local-p* Attention | **0.6234** |
+
+### Document Classification
+You can find a document (news) classification (many-to-one, multi-class) example on [Reuters Dataset](https://www.tensorflow.org/api_docs/python/tf/keras/datasets/reuters) inside ```examples/document_classification.py```. This example compares four distinct ```tf.keras.Model()```(*Functional API*) models (all word-level) and aims to measure the effectiveness of the implemented attention and self-attention layers over the conventional LSTM (Long Short Term Memory) models. Refer to the below table for metrics:
+
+| Model ID | Maximum Validation Categorical Accuracy |
+| -------- | --------------------------------------- |
+| LSTM Model | 0.7210 | 
+| LSTM Model w/ Self-Attention (Non-Penalized) | **0.7790** |
+| LSTM Model w/ Global Attention | 0.7496 |
+| LSTM Model w/ Local-p* Attention | 0.7446 |
+
+### Machine Translation
+You can find a machine translation (many-to-many) example on [English-to-Spanish Dataset](http://www.manythings.org/anki/) inside ```examples/machine_translation.py```. This example pretty much follows [TensorFlow's Machine Translation Example](https://www.tensorflow.org/beta/tutorials/text/nmt_with_attention) with some adaptions. It compares four distinct ```tf.keras.Model()```(*Functional API*) models (all word-level) and aims to measure the effectiveness of the implemented attention layer. Refer to the below table for metrics:
+
+| Model ID | Maximum Validation Categorical Accuracy |
+| -------- | --------------------------------------- |
+| Encoder-Decoder Model | 0.8848 | 
+| Encoder-Decoder Model w/ Global Attention | 0.8860 | 
+| Encoder-Decoder Model w/ Local-m Attention | **0.9524** | 
+| Encoder-Decoder Model w/ Local-p Attention | 0.8873 | 
 
 ## Contributing
 Whether it is bugs you have encountered, performance concerns, or any kind of input you have in mind, this is the perfect time to share them! Check ```CONTRIBUTING.md``` for more information and guidelines on this topic.
