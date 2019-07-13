@@ -27,7 +27,6 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer, Dense, Flatten, Activation, Permute
 from tensorflow.keras.layers import Multiply, Lambda, Reshape, Dot, Concatenate, RepeatVector, \
     TimeDistributed, Permute, Bidirectional
-from tensorflow.compat.v1.keras.layers import CuDNNLSTM   # CuDNNLSTM not yet released for TF 2.0
 
 
 class Attention(Layer):
@@ -43,18 +42,16 @@ class Attention(Layer):
     ii)  https://github.com/philipperemy/keras-attention-mechanism/issues/14
     iii) https://lilianweng.github.io/lil-log/2018/06/24/attention-attention.html
 
-    SUGGESTION: If model doesn't converge, increase either the hidden size of the RNN model, the
-    batch size of the model, or the param @size. If test accuracy is low, decrease these
-    hyperparameters instead.
+    SUGGESTION: If model doesn't converge or the test accuracy is lower than expected, try playing
+    around with the hidden size of the recurrent layers, the batch size in training process, or the
+    param @window_width if using a 'local' attention.
 
     NOTE: This implementation takes the hidden states associated with the last timestep of the input
     sequence as the target hidden state (h_t) as suggested by @felixhao28 in i) for many-to-one
     scenarios. Hence, when trying to predict what word (token) comes after sequence ['I', 'love',
     'biscuits', 'and'], we take h('and') with shape (1, H) as the target hidden state. For
     many-to-many scenarios, it takes the hidden state associated with the timestep that is being
-    currently iterated in the target sequence, usually by a decoder-like architecture. One thing
-    to keep in mind is that ALL decoder hidden states are collected and aligned with encoder
-    hidden states at once for simplification purposes. This shouldn't have an effect on performance.
+    currently iterated in the target sequence, usually by a decoder-like architecture.
 
     @param (str) context: the context of the problem at hand, specify 'many-to-many' for
            sequence-to-sequence tasks such as machine translation and question answering, or
@@ -63,7 +60,7 @@ class Attention(Layer):
            monotonic alignment where we take the last @window_width timesteps, 'local-p' corresponds
            to having a Gaussian distribution around the predicted aligned position, whereas
            'local-p*' corresponds to the newly proposed method to adaptively learning the unique
-           timesteps to give attention
+           timesteps to give attention (currently only works for many-to-one scenarios)
     @param (int) window_width: width for set of source hidden states in 'local' attention
     @param (str) score_function: alignment score function config; current implementations include
            the 'dot', 'general', and 'location' both by Luong et al. (2015), 'concat' by Bahdanau et
@@ -106,7 +103,7 @@ class Attention(Layer):
             self.input_sequence_length, self.hidden_dim = input_shape[0][1], input_shape[0][2]
             self.target_sequence_length = input_shape[1][1]
         elif self.context == 'many-to-one':
-            self.input_sequence_length, self.hidden_dim = input_shape[1], input_shape[2]
+            self.input_sequence_length, self.hidden_dim = input_shape[0][1], input_shape[0][2]
 
         # Build weight matrices for different alignment types and score functions
         if 'local-p' in self.alignment_type:
@@ -135,19 +132,16 @@ class Attention(Layer):
         super(Attention, self).build(input_shape)
 
     def call(self, inputs):
-        # Pass encoder outputs only for many-to-one scenarios
-        if self.context == 'many-to-one' and isinstance(inputs, list):
-            raise ValueError("Pass single tensor=encoder_output for @context='many-to-one'")
-        # Pass decoder output (prev. timestep) alongside encoder output for many-to-many scenarios
-        if self.context == 'many-to-many' and not isinstance(inputs, list):
+        # Pass decoder output (prev. timestep) alongside encoder output for all scenarios
+        if not isinstance(inputs, list):
             raise ValueError("Pass a list=[encoder_out (Tensor), decoder_out (Tensor)," +
-                             "current_timestep (int)] for @context='many-to-many'")
+                             "current_timestep (int)] for all scenarios")
 
         # Specify source and target states (and timestep if applicable) for easy access
         if self.context == 'many-to-one':
             # Get h_t, the current (target) hidden state as the last timestep of input sequence
-            target_hidden_state = Lambda(function=lambda x: x[:, -1, :])(inputs)                    # (B, H)
-            source_hidden_states = inputs                                                           # (B, S, H)
+            target_hidden_state = inputs[1]                                                         # (B, H)
+            source_hidden_states = inputs[0]                                                        # (B, S, H)
         elif self.context == 'many-to-many':
             # Get h_t, the current (target) hidden state from the previous decoded hidden state
             target_hidden_state = inputs[1]                                                         # (B, H)
@@ -196,25 +190,26 @@ class Attention(Layer):
                 aligned_position = Activation('sigmoid')(aligned_position)                          # (B, S, 1)
                 # Only keep top D values out of the sigmoid activation, and zero-out the rest
                 aligned_position = tf.squeeze(aligned_position, axis=-1)                            # (B, S)
-                top_probabilities = tf.nn.top_k(input=aligned_position,                             # (values:(B, 2xD), indices:(B, 2xD))
-                                                k=self.window_width*2,
+                top_probabilities = tf.nn.top_k(input=aligned_position,                             # (values:(B, D), indices:(B, D))
+                                                k=self.window_width,
                                                 sorted=False)
                 onehot_vector = tf.one_hot(indices=top_probabilities.indices,
-                                           depth=self.input_sequence_length)                        # (B, 2xD, S)
+                                           depth=self.input_sequence_length)                        # (B, D, S)
                 onehot_vector = tf.reduce_sum(onehot_vector, axis=1)                                # (B, S)
                 aligned_position = Multiply()([aligned_position, onehot_vector])                    # (B, S)
                 aligned_position = tf.expand_dims(aligned_position, axis=-1)                        # (B, S, 1)
-                source_hidden_states = Multiply()([inputs, aligned_position])                       # (B, S*=S(2xD), H)
+                initial_source_hidden_states = source_hidden_states                                 # (B, S, 1)
+                source_hidden_states = Multiply()([source_hidden_states, aligned_position])         # (B, S*=S(D), H)
                 # Scale back-to approximately original hidden state values
-                aligned_position += 1                                                               # (B, S, 1)
+                aligned_position += tf.keras.backend.epsilon()                                      # (B, S, 1)
                 source_hidden_states /= aligned_position                                            # (B, S*=S(D), H)
+                source_hidden_states = initial_source_hidden_states + source_hidden_states          # (B, S, H)
 
         # Compute alignment score through specified function
         if 'dot' in self.score_function:                                                            # Dot Score Function
-            if self.context == 'many-to-one':
-                attention_score = Dot(axes=[2, 2])([source_hidden_states, target_hidden_state])     # (B, S*, 1)
+            attention_score = Dot(axes=[2, 2])([source_hidden_states, target_hidden_state])         # (B, S*, 1)
             if self.score_function == 'scaled_dot':
-                attention_score = attention_score * (1 / np.sqrt(float(inputs.shape[2])))           # (B, S*, 1)
+                attention_score *= 1 / np.sqrt(float(source_hidden_states.shape[2]))                # (B, S*, 1)
 
         elif self.score_function == 'general':                                                      # General Score Function
             weighted_hidden_states = self.W_a(source_hidden_states)                                 # (B, S*, H)
@@ -258,7 +253,7 @@ class Attention(Layer):
 class SelfAttention(Layer):
     """
     Layer for implementing self-attention mechanism. Weight variables were preferred over Dense()
-    layers in implementation because they allow easy identification of shapes. Softmax activation
+    layers in implementation because they allow easier identification of shapes. Softmax activation
     ensures that all weights sum up to 1.
 
     @param (int) size: a.k.a attention length, number of hidden units to decode the attention before
@@ -280,7 +275,6 @@ class SelfAttention(Layer):
         self.penalty_coefficient = penalty_coefficient
         self.model_api = model_api
         super(SelfAttention, self).__init__(**kwargs)
-
 
     def get_config(self):
         base_config = super(SelfAttention, self).get_config()
