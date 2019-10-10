@@ -2,7 +2,7 @@
 """
 Created on Tue Jul 05 03:43:11 2019
 
-@author: ongunuzaymacar
+@author: uzaymacar
 
 Script containing an example and guideline for training multi-class document classification models
 using the implemented @HierarchicalAttention() layer.

@@ -2,7 +2,7 @@
 """
 Created on Wed Jun 19 20:08:11 2019
 
-@author: ongunuzaymacar
+@author: uzaymacar
 
 Script containing custom layer implementations for a family of attention mechanisms in TensorFlow
 with Keras integration (tested for TF 2.0). Comments next to each operation in each layer indicate

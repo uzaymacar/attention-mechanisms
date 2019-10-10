@@ -2,7 +2,7 @@
 """
 Created on Tue Jul 02 17:50:32 2019
 
-@author: ongunuzaymacar
+@author: uzaymacar
 
 Script containing an example and guideline for training machine translation models
 using the implemented @Attention() layer. This script is adapted from

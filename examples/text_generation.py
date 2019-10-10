@@ -2,7 +2,7 @@
 """
 Created on Tue Jul 02 17:47:47 2019
 
-@author: ongunuzaymacar
+@author: uzaymacar
 
 Script containing an example and guideline for training multi-class language models used for text
 generation, using the implemented @Attention and @SelfAttention() layers.

@@ -2,7 +2,7 @@
 """
 Created on Tue Jul 02 11:43:05 2019
 
-@author: ongunuzaymacar
+@author: uzaymacar
 
 Script containing an example and guideline for training binary sentiment classification models
 using the implemented @SelfAttention() layer.
