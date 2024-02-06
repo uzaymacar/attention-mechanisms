@@ -196,13 +196,12 @@ class Attention(Layer):
                 onehot_vector = tf.one_hot(indices=top_probabilities.indices,
                                            depth=self.input_sequence_length)                        # (B, D, S)
                 onehot_vector = tf.reduce_sum(onehot_vector, axis=1)                                # (B, S)
-                aligned_position = Multiply()([aligned_position, onehot_vector])                    # (B, S)
-                aligned_position = tf.expand_dims(aligned_position, axis=-1)                        # (B, S, 1)
-                initial_source_hidden_states = source_hidden_states                                 # (B, S, 1)
-                source_hidden_states = Multiply()([source_hidden_states, aligned_position])         # (B, S*=S(D), H)
-                # Scale back-to approximately original hidden state values
-                aligned_position += tf.keras.backend.epsilon()                                      # (B, S, 1)
-                source_hidden_states /= aligned_position                                            # (B, S*=S(D), H)
+                onehot_vector = tf.expand_dims(onehot_vector,axis = -1)                             # (B, S, 1)     
+       
+                initial_source_hidden_states = source_hidden_states                                 # (B, S, H)
+                # Directly use the onehot_vector by matching dimension rather then doing extra stuff with aligned_position .       
+                source_hidden_states = Multiply()([source_hidden_states, onehot_vector])            # (B, S, H)
+              
                 source_hidden_states = initial_source_hidden_states + source_hidden_states          # (B, S, H)
 
         # Compute alignment score through specified function
